@@ -4,11 +4,11 @@ A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on an
 
 | Tab | What it does | How |
 | --- | --- | --- |
-| Gameplay | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage.scs` |
-| Gameplay | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy.scs` |
-| Gameplay | Choose what lowers coach passenger satisfaction (driving style, lateness, speeding, crashes, wear, offences), turn off g-force job failure, board at 100% | Generated mod `ets2u_coach.scs` |
+| Gameplay | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
+| Gameplay | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
+| Gameplay | Choose what lowers coach passenger satisfaction (driving style, lateness, speeding, crashes, wear, offences), turn off g-force job failure, board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
 | Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
-| HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui.scs` |
+| HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | HUD & Dash | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | Backups | Undo any change the app made | Copies taken before every write |
 
@@ -32,6 +32,15 @@ By default Convoy makes every player run the same mods. Every mod this app gener
 optional for multiplayer (`mp_mod_optional: true` in its manifest), so you can keep yours on and still
 join players who don't have them, provided the session allows optional mods.
 
+Each player's mod files get their own name (`<tag>` above: six characters made once from your Steam
+account, or at random). The game tells local mods apart by file name, so your Coach comfort and a
+friend's, built from different settings, count as two separate optional mods rather than one mod in two
+versions. The tag never changes with your settings, so a mod stays enabled in Mod Manager when you change
+them. v0.4 and earlier used names without a tag; on first start the app replaces those files, and you
+enable the mods once more in Mod Manager.
+
+When you host from inside the game, tick **Enable optional mods** on the Convoy create screen.
+
 **If you host a dedicated Convoy server**
 
 1. In your own game, enable the mods everyone must have (map mods are always required), open the
@@ -45,8 +54,6 @@ join players who don't have them, provided the session allows optional mods.
 
 - In the Convoy session browser, turn on the filter that shows sessions with optional mods.
 - Your ETS2 Utilities mods can stay enabled; other players don't need them.
-- Sessions hosted from inside the game rather than on a dedicated server haven't been checked yet. If
-  joining fails there, disable the ETS2 Utilities mods in Mod Manager for that session.
 
 **What each feature does in a convoy**
 

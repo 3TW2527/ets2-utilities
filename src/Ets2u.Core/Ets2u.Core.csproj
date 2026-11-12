@@ -1,9 +1,14 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Mod Manager pictures, drawn by Mods/Icons/make_icons.py. -->
+    <EmbeddedResource Include="Mods\Icons\*.jpg" LogicalName="icons/%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

@@ -206,10 +206,51 @@ public class ModBuilderTests
     {
         var scs = ScsModBuilder.Build(NoDamage.Mod, new Dictionary<string, byte[]> { ["def/damage_data.sii"] = "x"u8.ToArray() });
         var manifest = Encoding.UTF8.GetString(ScsModBuilder.Read(scs, "manifest.sii")!);
-        Assert.Contains("mod_package : .ets2u_nodamage", manifest);
+        Assert.Contains("mod_package : .ets2u_mod", manifest);
         Assert.Contains("display_name: \"ETS2 Utilities: No damage\"", manifest);
         SiiDocument.Parse(manifest);
         Assert.Equal("x"u8.ToArray(), ScsModBuilder.Read(scs, "def/damage_data.sii"));
+    }
+
+    [Fact]
+    public void EveryModHasItsPicture()
+    {
+        foreach (var mod in GeneratedMods.All)
+        {
+            var icon = ScsModBuilder.Icon(mod);
+            Assert.NotNull(icon);
+            Assert.Equal(new byte[] { 0xFF, 0xD8 }, icon![..2]); // JPEG
+            var scs = ScsModBuilder.Build(mod, new Dictionary<string, byte[]>());
+            Assert.Equal(icon, ScsModBuilder.Read(scs, ScsModBuilder.IconFile));
+            Assert.Contains($"icon: \"{ScsModBuilder.IconFile}\"", ScsModBuilder.Manifest(mod));
+            SiiDocument.Parse(ScsModBuilder.Manifest(mod));
+        }
+    }
+
+    [Fact]
+    public void ManifestUnitNameFitsSiiLimit() =>
+        // Each dot-separated part of a unit name is at most 12 characters; longer made the game skip the manifest.
+        Assert.All(ScsModBuilder.ManifestUnit.Split('.', StringSplitOptions.RemoveEmptyEntries),
+            part => Assert.InRange(part.Length, 1, 12));
+
+    [Fact]
+    public void FileNamesCarryThePlayerTag()
+    {
+        Assert.Equal("ets2u_coach.scs", CoachComfort.Mod.FileName);
+        var mine = GeneratedMods.ForPlayer(CoachComfort.Mod, new AppSettings { ModTag = "3fa9c1" });
+        Assert.Equal("ets2u_coach_3fa9c1.scs", mine.FileName);
+        Assert.Equal("ets2u_coach_3fa9c1", mine.PackageName);
+        Assert.Equal("ets2u_coach.scs", mine.LegacyFileName);
+    }
+
+    [Fact]
+    public void TagFromAccountIsStableAndShort()
+    {
+        Assert.Equal(ModTag.FromAccount("12345"), ModTag.FromAccount("12345"));
+        Assert.NotEqual(ModTag.FromAccount("12345"), ModTag.FromAccount("12346"));
+        Assert.Matches("^[0-9a-f]{6}$", ModTag.FromAccount("12345")!);
+        Assert.Null(ModTag.FromAccount(null));
+        Assert.Matches("^[0-9a-f]{6}$", ModTag.Create([]));
     }
 
     [Fact]

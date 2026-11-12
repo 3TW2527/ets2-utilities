@@ -11,7 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>ets2u</AssemblyName>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
   </PropertyGroup>
 
   <!-- Ship the speed plugin next to the exe when it's been built. -->

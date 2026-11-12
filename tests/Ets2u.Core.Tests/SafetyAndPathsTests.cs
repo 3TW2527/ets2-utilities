@@ -63,6 +63,24 @@ public class SafeWriterTests
     }
 
     [Fact]
+    public void DeletesAfterBackingUp()
+    {
+        using var dir = new TempDir();
+        var oldMod = Path.Combine(dir.Path, "ets2u_coach.scs");
+        var newMod = Path.Combine(dir.Path, "ets2u_coach_3fa9c1.scs");
+        File.WriteAllText(oldMod, "old");
+        var backups = new BackupService(Path.Combine(dir.Path, "backups"));
+
+        var backup = new SafeWriter(backups, () => false)
+            .Write("test", new Dictionary<string, byte[]> { [newMod] = "new"u8.ToArray() }, [oldMod]);
+
+        Assert.False(File.Exists(oldMod));
+        Assert.Equal("new", File.ReadAllText(newMod));
+        backups.Restore(backup);
+        Assert.Equal("old", File.ReadAllText(oldMod));
+    }
+
+    [Fact]
     public void RefusesWhileGameRuns()
     {
         using var dir = new TempDir();

@@ -33,8 +33,14 @@ public sealed class AppSettings
     /// <summary>v0.3's single "satisfaction never drops" switch; read once and turned into <see cref="CoachIgnored"/>.</summary>
     public bool? CoachNoPenalties { get; set; }
 
+    /// <summary>Suffix on this player's generated mod file names; made once (see <see cref="Mods.ModTag"/>).</summary>
+    public string? ModTag { get; set; }
+
     /// <summary>The game version the mods were last built from; a change means they're rebuilt on start.</summary>
     public DateTime? ModsBuiltForGameStamp { get; set; }
+
+    /// <summary>The app version that last built the mods; a newer app rebuilds them on start.</summary>
+    public string? ModsBuiltByApp { get; set; }
 
     static readonly JsonSerializerOptions Json = new()
     {

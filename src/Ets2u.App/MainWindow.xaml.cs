@@ -144,6 +144,7 @@ public partial class MainWindow : Window
     string DescribeMod(ModSpec mod)
     {
         if (!_app.ModExists(mod)) return "Mod not created yet.";
+        mod = _app.Mine(mod);
         var active = ModStatus.ActiveIn(_app.Profiles, mod);
         return active.Count == 0
             ? $"{mod.FileName} is in the mod folder, but not enabled in any profile yet. Enable \"{mod.DisplayName}\" in Mod Manager."

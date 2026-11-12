@@ -28,9 +28,16 @@ public sealed class AppServices
     {
         Writer = new SafeWriter(Backups);
         Refresh();
+        if (string.IsNullOrEmpty(Settings.ModTag))
+        {
+            Settings.ModTag = ModTag.Create(Paths.CloudProfileRoots);
+            Settings.Save();
+        }
     }
 
     public bool GameRunning => SafeWriter.IsGameRunning();
+
+    static string AppVersion => typeof(AppServices).Assembly.GetName().Version?.ToString() ?? "";
 
     public void Refresh()
     {
@@ -48,7 +55,26 @@ public sealed class AppServices
         StatusChanged?.Invoke(message);
     }
 
-    public bool ModExists(ModSpec mod) => File.Exists(Path.Combine(Paths.ModDir, mod.FileName));
+    /// <summary>The mod as this player's file is named.</summary>
+    public ModSpec Mine(ModSpec mod) => GeneratedMods.ForPlayer(mod, Settings);
+
+    /// <summary>Whether the mod was ever created here, under this player's name or an older one.</summary>
+    public bool ModExists(ModSpec mod) =>
+        File.Exists(Path.Combine(Paths.ModDir, Mine(mod).FileName)) || OldModFiles(mod).Any();
+
+    /// <summary>
+    /// Copies of the mod under other names: the untagged name v0.4 used, or another tag (settings reset).
+    /// Left in place they'd load next to the current copy.
+    /// </summary>
+    IEnumerable<string> OldModFiles(ModSpec mod)
+    {
+        if (!Directory.Exists(Paths.ModDir)) return [];
+        var current = Mine(mod).FileName;
+        return Directory.EnumerateFiles(Paths.ModDir, $"{mod.Id}*.scs")
+            .Where(f => Path.GetFileName(f) is var name && name != current
+                        && (name == mod.LegacyFileName || System.Text.RegularExpressions.Regex.IsMatch(name, $@"^{mod.Id}_[0-9a-f]{{6}}\.scs$")))
+            .ToList();
+    }
 
     /// <summary>Saves settings, rebuilds every generated mod and writes the ones that changed.</summary>
     public string ApplyMods()
@@ -62,30 +88,47 @@ public sealed class AppServices
                         || !File.ReadAllBytes(Path.Combine(Paths.ModDir, m.Key)).SequenceEqual(m.Value))
             .ToDictionary(m => Path.Combine(Paths.ModDir, m.Key), m => m.Value);
 
-        Settings.ModsBuiltForGameStamp = Paths.VersionStamp;
-        Settings.Save();
-        if (changed.Count == 0) return "No changes.";
+        var old = GeneratedMods.All.SelectMany(OldModFiles).ToList();
 
-        Writer.Write("Rebuild mods: " + string.Join(", ", changed.Keys.Select(Path.GetFileName)), changed);
+        Settings.ModsBuiltForGameStamp = Paths.VersionStamp;
+        Settings.ModsBuiltByApp = AppVersion;
+        Settings.Save();
+        if (changed.Count == 0 && old.Count == 0) return "No changes.";
+
+        Writer.Write("Rebuild mods: " + string.Join(", ", changed.Keys.Select(Path.GetFileName)), changed, old);
         Changed?.Invoke();
-        return $"Updated {string.Join(", ", changed.Keys.Select(Path.GetFileName))}. Restart ETS2 to apply.";
+        var message = changed.Count == 0 ? "" : $"Updated {string.Join(", ", changed.Keys.Select(Path.GetFileName))}. ";
+        if (old.Count > 0)
+            message += $"Removed the old {string.Join(", ", old.Select(Path.GetFileName))}: the mods have new file names, " +
+                       "so enable them again once in Mod Manager. ";
+        return message + "Restart ETS2 to apply.";
     }
 
     /// <summary>
     /// After a game update the mods still hold the old version's files. Rebuild them from the new
-    /// files on start, when there are mods to rebuild and the game isn't running.
+    /// files on start, when there are mods to rebuild and the game isn't running. The same after an
+    /// app update (new mod contents, e.g. pictures), and for mods still under an old file name
+    /// (v0.4 and earlier), which move to this player's names.
     /// </summary>
     public string? RebuildIfGameUpdated()
     {
-        if (Paths.VersionStamp is null || Settings.ModsBuiltForGameStamp == Paths.VersionStamp) return null;
+        if (Paths.VersionStamp is null) return null;
+        var gameUpdated = Settings.ModsBuiltForGameStamp != Paths.VersionStamp;
+        var renamed = GeneratedMods.All.Any(m => OldModFiles(m).Any());
+        var appUpdated = Settings.ModsBuiltByApp != AppVersion;
+        if (!gameUpdated && !renamed && !appUpdated) return null;
         if (!GeneratedMods.All.Any(ModExists))
         {
             Settings.ModsBuiltForGameStamp = Paths.VersionStamp;
+            Settings.ModsBuiltByApp = AppVersion;
             Settings.Save();
             return null;
         }
-        if (GameRunning) return "ETS2 was updated. Close the game and reopen this app to update the mods.";
-        return $"ETS2 was updated to {Paths.GameVersion}. " + ApplyMods();
+        if (GameRunning)
+            return gameUpdated
+                ? "ETS2 was updated. Close the game and reopen this app to update the mods."
+                : "This version of the app updates your mods. Close the game and reopen this app to update them.";
+        return (gameUpdated ? $"ETS2 was updated to {Paths.GameVersion}. " : "") + ApplyMods();
     }
 
     readonly Dictionary<string, LevelTable?> _levelTables = new();
