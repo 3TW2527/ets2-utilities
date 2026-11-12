@@ -26,8 +26,12 @@ public sealed class AppSettings
     public OverlayCorner OverlayCorner { get; set; } = OverlayCorner.TopRight;
     public double OverlayScale { get; set; } = 1;
     public bool OverlayShowLimit { get; set; } = true;
-    public bool CoachNoPenalties { get; set; }
+    /// <summary>Factors that no longer lower coach passenger satisfaction.</summary>
+    public Features.CoachFactor CoachIgnored { get; set; }
     public bool CoachFullSatisfaction { get; set; }
+
+    /// <summary>v0.3's single "satisfaction never drops" switch; read once and turned into <see cref="CoachIgnored"/>.</summary>
+    public bool? CoachNoPenalties { get; set; }
 
     /// <summary>The game version the mods were last built from; a change means they're rebuilt on start.</summary>
     public DateTime? ModsBuiltForGameStamp { get; set; }
@@ -35,6 +39,7 @@ public sealed class AppSettings
     static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() },
     };
 
@@ -45,7 +50,10 @@ public sealed class AppSettings
         path ??= FilePath;
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new() : new();
+            var settings = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new() : new();
+            if (settings.CoachNoPenalties == true) settings.CoachIgnored = Features.CoachFactor.All;
+            settings.CoachNoPenalties = null;
+            return settings;
         }
         catch (JsonException)
         {

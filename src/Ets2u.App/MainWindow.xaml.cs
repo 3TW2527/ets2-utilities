@@ -132,7 +132,9 @@ public partial class MainWindow : Window
         IncomeSlider.Value = s.IncomeMultiplier;
         XpSlider.Value = s.XpMultiplier;
         UpdateSliderLabels();
-        CoachPenaltiesBox.IsChecked = s.CoachNoPenalties;
+        foreach (var box in CoachFactorBoxes)
+            box.IsChecked = s.CoachIgnored.HasFlag(Enum.Parse<CoachFactor>((string)box.Tag));
+        CoachJobFailureBox.IsChecked = s.CoachIgnored.HasFlag(CoachFactor.JobFailure);
         CoachFullBox.IsChecked = s.CoachFullSatisfaction;
         NoDamageStatus.Text = DescribeMod(NoDamage.Mod);
         EarningsStatus.Text = DescribeMod(Earnings.Mod);
@@ -162,10 +164,25 @@ public partial class MainWindow : Window
         _app.Settings.NoDamage = NoDamageBox.IsChecked == true;
         _app.Settings.IncomeMultiplier = Math.Round(IncomeSlider.Value);
         _app.Settings.XpMultiplier = Math.Round(XpSlider.Value);
-        _app.Settings.CoachNoPenalties = CoachPenaltiesBox.IsChecked == true;
+        var ignored = CoachFactorBoxes.Where(b => b.IsChecked == true)
+            .Aggregate(CoachFactor.None, (all, b) => all | Enum.Parse<CoachFactor>((string)b.Tag));
+        if (CoachJobFailureBox.IsChecked == true) ignored |= CoachFactor.JobFailure;
+        _app.Settings.CoachIgnored = ignored;
         _app.Settings.CoachFullSatisfaction = CoachFullBox.IsChecked == true;
         return _app.ApplyMods();
     });
+
+    IEnumerable<CheckBox> CoachFactorBoxes => CoachFactorPanel.Children.OfType<CheckBox>();
+
+    void CoachAll_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var box in CoachFactorBoxes) box.IsChecked = true;
+    }
+
+    void CoachNone_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var box in CoachFactorBoxes) box.IsChecked = false;
+    }
 
     // ---------- Money & XP ----------
 

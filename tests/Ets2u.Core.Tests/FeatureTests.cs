@@ -101,17 +101,60 @@ public class CoachComfortTests
         "\tsatisfaction_acceleration_penalties[]: (0.6, 0.9)\n" +
         "\tsatisfaction_crash_penalties[]: (0.05, 0.1)\n" +
         "\tsatisfaction_speed_penalty: (0.09, 0.18)\n" +
+        "\tsatisfaction_late_penalty: (0.05, 0.13)\n" +
         "\tsatisfaction_on_time_reward: (0.06, 0.18)\n" +
         "\tfailure_acceleration_limit: (-1.0, -1.0, 22.0)\n" +
         "}\n}\n";
 
-    static SiiDocument Build(bool noPenalties, bool full) =>
-        SiiDocument.Parse(CoachComfort.Build(Encoding.UTF8.GetBytes(Stock), noPenalties, full));
+    static SiiDocument Build(CoachFactor ignored, bool full) =>
+        SiiDocument.Parse(CoachComfort.Build(Encoding.UTF8.GetBytes(Stock), ignored, full));
+
+    [Fact]
+    public void LatenessOnlyLeavesDrivingStyleCounting()
+    {
+        var doc = Build(CoachFactor.Lateness, false);
+        var unit = doc.FindUnit("bus_economy_data")!;
+        Assert.Equal("(0.0, 0.0)", doc.GetValue(unit, "satisfaction_late_penalty"));
+        Assert.Equal(["(0.09, 0.18)", "(0.6, 0.9)"], doc.GetValues(unit, "satisfaction_acceleration_penalties[]"));
+        Assert.Equal("(0.09, 0.18)", doc.GetValue(unit, "satisfaction_speed_penalty"));
+        Assert.Equal("(-1.0, -1.0, 22.0)", doc.GetValue(unit, CoachComfort.FailureLimitKey));
+    }
+
+    [Fact]
+    public void DrivingStyleCoversBothThresholds()
+    {
+        var doc = Build(CoachFactor.DrivingStyle, false);
+        var unit = doc.FindUnit("bus_economy_data")!;
+        Assert.Equal(["(0.0, 0.0)", "(0.0, 0.0)"], doc.GetValues(unit, "satisfaction_acceleration_penalties[]"));
+        Assert.Equal("(0.05, 0.13)", doc.GetValue(unit, "satisfaction_late_penalty"));
+    }
+
+    [Fact]
+    public void JobFailureIsSeparateFromScore()
+    {
+        var doc = Build(CoachFactor.JobFailure, false);
+        var unit = doc.FindUnit("bus_economy_data")!;
+        Assert.Equal("(-1.0, -1.0, -1.0)", doc.GetValue(unit, CoachComfort.FailureLimitKey));
+        Assert.Equal(["(0.09, 0.18)", "(0.6, 0.9)"], doc.GetValues(unit, "satisfaction_acceleration_penalties[]"));
+    }
+
+    [Fact]
+    public void OldNeverDropsSettingBecomesAllFactors()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, "{ \"CoachNoPenalties\": true }");
+        var settings = AppSettings.Load(path);
+        Assert.Equal(CoachFactor.All, settings.CoachIgnored);
+        settings.Save(path);
+        Assert.DoesNotContain("CoachNoPenalties", File.ReadAllText(path));
+        Assert.Equal(CoachFactor.All, AppSettings.Load(path).CoachIgnored);
+    }
 
     [Fact]
     public void ZeroesEveryPenaltyIncludingRepeatedArrayLines()
     {
-        var doc = Build(true, false);
+        var doc = Build(CoachFactor.All, false);
         var unit = doc.FindUnit("bus_economy_data")!;
         Assert.Equal(["(0.0, 0.0)", "(0.0, 0.0)"], doc.GetValues(unit, "satisfaction_acceleration_penalties[]"));
         Assert.Equal("(0.0, 0.0)", doc.GetValue(unit, "satisfaction_crash_penalties[]"));
@@ -138,7 +181,7 @@ public class CoachComfortTests
     [Fact]
     public void FullSatisfactionOnlyChangesBoarding()
     {
-        var doc = Build(false, true);
+        var doc = Build(CoachFactor.None, true);
         var unit = doc.FindUnit("bus_economy_data")!;
         Assert.Equal("(1.0, 1.0)", doc.GetValue(unit, CoachComfort.NewPassengerKey));
         Assert.Equal("(0.09, 0.18)", doc.GetValue(unit, "satisfaction_speed_penalty"));
@@ -148,7 +191,7 @@ public class CoachComfortTests
     public void BothOffIsStock()
     {
         var stock = Encoding.UTF8.GetBytes(Stock);
-        Assert.Equal(stock, CoachComfort.Build(stock, false, false));
+        Assert.Equal(stock, CoachComfort.Build(stock, CoachFactor.None, false));
     }
 }
 

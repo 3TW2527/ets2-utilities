@@ -6,7 +6,7 @@ A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on an
 | --- | --- | --- |
 | Gameplay | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage.scs` |
 | Gameplay | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy.scs` |
-| Gameplay | Coach passenger satisfaction never drops; board at 100% | Generated mod `ets2u_coach.scs` |
+| Gameplay | Choose what lowers coach passenger satisfaction (driving style, lateness, speeding, crashes, wear, offences), turn off g-force job failure, board at 100% | Generated mod `ets2u_coach.scs` |
 | Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui.scs` |
 | HUD & Dash | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
@@ -25,6 +25,41 @@ players having them.
    "ETS2 Utilities" mod once in Mod Manager.
 
 Every change is backed up first (Backups tab). Don't use edited saves or the plugin on TruckersMP.
+
+## Playing in Convoy (SCS multiplayer)
+
+By default Convoy makes every player run the same mods. Every mod this app generates is marked
+optional for multiplayer (`mp_mod_optional: true` in its manifest), so you can keep yours on and still
+join players who don't have them, provided the session allows optional mods.
+
+**If you host a dedicated Convoy server**
+
+1. In your own game, enable the mods everyone must have (map mods are always required), open the
+   console and run `export_server_packages`.
+2. Copy the exported `server_packages.sii` and `server_packages.dat` to the server's config folder.
+3. In the server's `server_config.sii`, set `mods_optioning: true`. Without it, optional mods are treated
+   as required.
+4. Restart the server (it reads its config only at start).
+
+**As a player**
+
+- In the Convoy session browser, turn on the filter that shows sessions with optional mods.
+- Your ETS2 Utilities mods can stay enabled; other players don't need them.
+- Sessions hosted from inside the game rather than on a dedicated server haven't been checked yet. If
+  joining fails there, disable the ETS2 Utilities mods in Mod Manager for that session.
+
+**What each feature does in a convoy**
+
+| Feature | In Convoy |
+| --- | --- |
+| No damage | Applies to your own truck or coach only |
+| Coach comfort | Applies to your own passengers only |
+| Map position | Only changes your HUD |
+| Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
+| Money & XP | Edits your own profile's save; other players aren't affected |
+| Speed overlay | Runs on your PC only |
+
+Don't use any of this on TruckersMP, which has its own rules and anti-cheat.
 
 ## Requirements (to build)
 

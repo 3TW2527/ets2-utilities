@@ -100,10 +100,23 @@
                         <TextBlock x:Name="EarningsStatus" Style="{StaticResource Note}"/>
 
                         <TextBlock Style="{StaticResource H}" Text="Coach passengers"/>
-                        <CheckBox x:Name="CoachPenaltiesBox" Content="Satisfaction never drops (no penalty for g-force, braking, crashes, speeding, lateness, wear or offences)"/>
+                        <TextBlock Text="These no longer lower passenger satisfaction:" Margin="0,0,0,4"/>
+                        <WrapPanel x:Name="CoachFactorPanel" Margin="12,0,0,0">
+                            <CheckBox Tag="DrivingStyle" Content="Driving style (g-forces from accelerating, braking, cornering)" Width="440" Margin="0,3"/>
+                            <CheckBox Tag="Lateness" Content="Arriving late" Width="220" Margin="0,3"/>
+                            <CheckBox Tag="Speeding" Content="Speeding" Width="440" Margin="0,3"/>
+                            <CheckBox Tag="Crashes" Content="Crashes" Width="220" Margin="0,3"/>
+                            <CheckBox Tag="CoachWear" Content="Coach wear and damage" Width="440" Margin="0,3"/>
+                            <CheckBox Tag="Offences" Content="Traffic offences (fines)" Width="220" Margin="0,3"/>
+                        </WrapPanel>
+                        <StackPanel Orientation="Horizontal" Margin="12,4,0,0">
+                            <Button Content="Tick all" Click="CoachAll_Click" Padding="10,2"/>
+                            <Button Content="Clear" Click="CoachNone_Click" Padding="10,2"/>
+                        </StackPanel>
+                        <CheckBox x:Name="CoachJobFailureBox" Content="Extreme g-force no longer fails the job" Margin="0,10,0,0"/>
                         <CheckBox x:Name="CoachFullBox" Content="Passengers board fully satisfied" Margin="0,6,0,0"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="The first option also turns off the g-force limit that can fail a coach job. The g-force meter on the HUD still moves; it just no longer counts against you."/>
+                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The g-force meter on the HUD still moves either way."/>
                         <TextBlock x:Name="CoachStatus" Style="{StaticResource Note}"/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">

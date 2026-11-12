@@ -19,8 +19,8 @@ public static class GeneratedMods
             mods[NoDamage.Mod.FileName] = NoDamage.BuildMod(game.Read(NoDamage.GamePath), s.NoDamage);
         if (s.IncomeMultiplier != 1 || s.XpMultiplier != 1 || exists(Earnings.Mod))
             mods[Earnings.Mod.FileName] = Earnings.BuildMod(game.Read(Earnings.GamePath), s.IncomeMultiplier, s.XpMultiplier);
-        if (s.CoachNoPenalties || s.CoachFullSatisfaction || exists(CoachComfort.Mod))
-            mods[CoachComfort.Mod.FileName] = CoachComfort.BuildMod(game.Read(CoachComfort.GamePath), s.CoachNoPenalties, s.CoachFullSatisfaction);
+        if (s.CoachIgnored != CoachFactor.None || s.CoachFullSatisfaction || exists(CoachComfort.Mod))
+            mods[CoachComfort.Mod.FileName] = CoachComfort.BuildMod(game.Read(CoachComfort.GamePath), s.CoachIgnored, s.CoachFullSatisfaction);
         if (s.MapPositionEnabled || exists(HudMod.Mod))
             mods[HudMod.Mod.FileName] = HudMod.BuildMod(game, s);
         return mods;
