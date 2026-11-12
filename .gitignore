@@ -1,0 +1,11 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+
+# SCS tools and anything extracted from the game: never commit
+tools/
+*.scs
+game_cache/
+publish-*/
