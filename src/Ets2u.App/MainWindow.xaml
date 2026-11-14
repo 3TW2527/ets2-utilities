@@ -258,6 +258,60 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- Game Information -->
+            <TabItem Header="Game Information">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="330"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Fuel prices" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="FuelNote" DockPanel.Dock="Top" Style="{StaticResource Note}"/>
+                        <DataGrid x:Name="FuelGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal" CanUserAddRows="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Country" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="€ per litre" Binding="{Binding FuelPrice, StringFormat=0.000##}" Width="85"/>
+                                <DataGridTextColumn Header="Cities" Binding="{Binding CityCount}" Width="55"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+
+                    <DockPanel Grid.Column="2">
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Cities" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="CityNote" DockPanel.Dock="Top" Style="{StaticResource Note}"/>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Find" VerticalAlignment="Center"/>
+                            <TextBox x:Name="CityFilter" Grid.Column="1" TextChanged="CityFilter_Changed"/>
+                        </Grid>
+                        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="CopyGotoButton" Content="Copy goto command" Click="CopyGoto_Click"/>
+                            <Button x:Name="CopyCityButton" Content="Copy name" Click="CopyCity_Click"/>
+                        </StackPanel>
+                        <DataGrid x:Name="CityGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Single"
+                                  SelectionChanged="CityGrid_SelectionChanged" MouseDoubleClick="CityGrid_DoubleClick">
+                            <DataGrid.CommandBindings>
+                                <CommandBinding Command="ApplicationCommands.Copy" Executed="CityGrid_Copy"/>
+                            </DataGrid.CommandBindings>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="City" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="Name in game" Binding="{Binding LocalName}" Width="*"/>
+                                <DataGridTextColumn Header="Country" Binding="{Binding Country}" Width="*"/>
+                                <DataGridTextColumn Header="From" Binding="{Binding Source}" Width="100"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Grid>
+            </TabItem>
+
             <!-- Backups -->
             <TabItem Header="Backups">
                 <DockPanel Margin="12">

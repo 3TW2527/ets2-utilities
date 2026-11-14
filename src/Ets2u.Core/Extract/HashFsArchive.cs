@@ -9,8 +9,10 @@ namespace Ets2u.Core.Extract;
 /// unpacking whole multi-gigabyte archives. Plain files only; textures aren't needed.
 /// Format facts as documented by the Archive::SCS project (metacpan.org/pod/Archive::SCS::HashFS2).
 /// </summary>
-public sealed class HashFsArchive : IDisposable
+public sealed class HashFsArchive : IGameArchive, IDisposable
 {
+    public string Name => System.IO.Path.GetFileNameWithoutExtension(Path);
+
     readonly record struct Entry(long Offset, int StoredSize, int Size, bool Zlib, bool IsDirectory);
 
     const int HeaderSize = 0x34;
@@ -107,6 +109,28 @@ public sealed class HashFsArchive : IDisposable
         if (!_entries.TryGetValue(Key(gamePath), out var e) || e.IsDirectory) return null;
         var stored = ReadAt(e.Offset, e.StoredSize);
         return e.Zlib ? Inflate(stored, e.Size) : stored;
+    }
+
+    /// <summary>
+    /// Names of the files directly in a directory (subdirectories left out), or null if this archive
+    /// doesn't have the directory. A listing is a count, one length byte per name, then the names;
+    /// subdirectory names start with '/'.
+    /// </summary>
+    public IReadOnlyList<string>? ListFiles(string gameDir)
+    {
+        if (!_entries.TryGetValue(Key(gameDir), out var e) || !e.IsDirectory) return null;
+        var stored = ReadAt(e.Offset, e.StoredSize);
+        var data = (e.Zlib ? Inflate(stored, e.Size) : stored).AsSpan();
+        var count = BinaryPrimitives.ReadInt32LittleEndian(data);
+        var names = new List<string>(count);
+        var at = 4 + count;
+        for (var i = 0; i < count; i++)
+        {
+            var name = System.Text.Encoding.UTF8.GetString(data.Slice(at, data[4 + i]));
+            at += data[4 + i];
+            if (!name.StartsWith('/')) names.Add(name);
+        }
+        return names;
     }
 
     public int EntryCount => _entries.Count;

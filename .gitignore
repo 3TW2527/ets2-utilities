@@ -9,3 +9,4 @@ tools/
 *.scs
 game_cache/
 publish-*/
+build-release.bat

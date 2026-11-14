@@ -2,6 +2,7 @@ using System.IO;
 using Ets2u.Core;
 using Ets2u.Core.Extract;
 using Ets2u.Core.Features;
+using Ets2u.Core.Info;
 using Ets2u.Core.Mods;
 using Ets2u.Core.Paths;
 using Ets2u.Core.Safety;
@@ -46,7 +47,34 @@ public sealed class AppServices
         (Game as IDisposable)?.Dispose();
         Game = Paths.InstallDir is null ? null : new GameArchives(Paths.InstallDir);
         _levelTables.Clear();
+        _infoLoaded = false;
         Changed?.Invoke();
+    }
+
+    bool _infoLoaded;
+    GameInfo? _info;
+
+    /// <summary>Why <see cref="Info"/> is null although the game was found.</summary>
+    public string? InfoProblem { get; private set; }
+
+    /// <summary>The installed game's countries and cities, read once per refresh; null if they can't be read.</summary>
+    public GameInfo? Info
+    {
+        get
+        {
+            if (_infoLoaded) return _info;
+            _infoLoaded = true;
+            _info = null;
+            InfoProblem = null;
+            if (Paths.InstallDir is null) return null;
+            try { _info = GameInfo.FromInstall(Paths.InstallDir); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                InfoProblem = "Couldn't read the game's archives: " + ex.Message;
+                AppDirs.Log(InfoProblem);
+            }
+            return _info;
+        }
     }
 
     public void Status(string message)

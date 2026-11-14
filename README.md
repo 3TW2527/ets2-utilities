@@ -10,6 +10,7 @@ A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on an
 | Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | HUD & Dash | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
+| Game Information | Fuel price per country, and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs`, the installed `dlc_*.scs` and `locale.scs` |
 | Backups | Undo any change the app made | Copies taken before every write |
 
 Mods are built from the game's own files, read straight out of its `.scs` archives (a few milliseconds,

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Ets2u.Core;
 using Ets2u.Core.Features;
+using Ets2u.Core.Info;
 using Ets2u.Core.Mods;
 using Ets2u.Core.Paths;
 using Ets2u.Core.Safety;
@@ -51,6 +52,7 @@ public partial class MainWindow : Window
         RefreshGameplay();
         RefreshProfiles();
         RefreshHud();
+        RefreshInfo();
         RefreshBackups();
         UpdateBanner();
         _loading = false;
@@ -420,6 +422,95 @@ public partial class MainWindow : Window
             _overlay?.Close();
             _overlay = null;
         }
+    }
+
+    // ---------- Game Information ----------
+
+    sealed record CityRow(CityInfo City, string Name, string LocalName, string Country, string Source);
+
+    IReadOnlyList<CityRow> _cities = Array.Empty<CityRow>();
+
+    void RefreshInfo()
+    {
+        var info = _app.Info;
+        FuelGrid.ItemsSource = info?.Countries;
+        _cities = (info?.Cities ?? Array.Empty<CityInfo>())
+            .Select(c => new CityRow(c, c.Name, c.LocalName, c.Country,
+                c.Source == GameInfo.BaseArchive ? "Base game" : c.Source))
+            .ToList();
+        FuelNote.Text = info is null
+            ? _app.InfoProblem ?? "ETS2 wasn't found."
+            : "Base price in each country, from the game's files. Countries of map DLCs this PC doesn't have are left out.";
+        CityNote.Text = info is null ? ""
+            : "Double-click a city (or press Ctrl+C) to copy its name as the game's console expects it, e.g. " +
+              "\"goto Köln\". After goto moves the camera, press Ctrl+F9 to bring the truck there.";
+        FilterCities();
+    }
+
+    void CityFilter_Changed(object sender, TextChangedEventArgs e) => FilterCities();
+
+    void FilterCities()
+    {
+        var find = CityFilter.Text.Trim();
+        var shown = find.Length == 0 ? _cities : _cities.Where(c =>
+            new[] { c.Name, c.LocalName, c.Country, c.City.Token, c.Source }
+                .Any(text => text.Contains(find, StringComparison.CurrentCultureIgnoreCase))).ToList();
+        CityGrid.ItemsSource = shown;
+        UpdateCopyButtons();
+    }
+
+    void CityGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateCopyButtons();
+
+    void UpdateCopyButtons() =>
+        CopyCityButton.IsEnabled = CopyGotoButton.IsEnabled = CityGrid.SelectedItem is CityRow;
+
+    void CityGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => CopyCity(c => c.LocalName);
+
+    void CityGrid_Copy(object sender, System.Windows.Input.ExecutedRoutedEventArgs e) => CopyCity(c => c.LocalName);
+
+    void CopyCity_Click(object sender, RoutedEventArgs e) => CopyCity(c => c.LocalName);
+
+    void CopyGoto_Click(object sender, RoutedEventArgs e) => CopyCity(c => c.GotoCommand);
+
+    void CopyCity(Func<CityInfo, string> text)
+    {
+        if (CityGrid.SelectedItem is not CityRow row) return;
+        var copied = text(row.City);
+        _app.Status(TrySetClipboard(copied)
+            ? $"Copied \"{copied}\"."
+            : "The clipboard is in use by another program. Try again.");
+    }
+
+    /// <summary>
+    /// Windows often reports the clipboard as busy (a clipboard manager is reading it) although the
+    /// text was set, so a failure only counts if the text isn't there afterwards.
+    /// </summary>
+    static bool TrySetClipboard(string text)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                Clipboard.SetDataObject(text, true);
+                return true;
+            }
+            catch (System.Runtime.InteropServices.ExternalException)
+            {
+                for (var check = 0; check < 10; check++)
+                {
+                    System.Threading.Thread.Sleep(50);
+                    try
+                    {
+                        if (Clipboard.GetText() == text) return true;
+                        break; // readable, but not our text: set it again
+                    }
+                    catch (System.Runtime.InteropServices.ExternalException)
+                    {
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // ---------- Backups ----------

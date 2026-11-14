@@ -7,6 +7,19 @@ public interface IGameFiles
     byte[]? TryRead(string gamePath);
 }
 
+/// <summary>One archive of the game, for code that needs to know what an archive holds and which one it came from.</summary>
+public interface IGameArchive
+{
+    /// <summary>The archive's file name without ".scs", e.g. "dlc_fr".</summary>
+    string Name { get; }
+
+    /// <summary>Names of the files directly in a directory, or null if the archive doesn't have it.</summary>
+    IReadOnlyList<string>? ListFiles(string gameDir);
+
+    /// <summary>The file's bytes, or null if the archive doesn't hold it.</summary>
+    byte[]? Read(string gamePath);
+}
+
 public static class GameFilesExtensions
 {
     public static byte[] Read(this IGameFiles files, string gamePath) =>
