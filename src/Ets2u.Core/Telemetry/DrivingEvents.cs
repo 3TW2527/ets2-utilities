@@ -6,29 +6,58 @@ public enum DrivingEventKind { Acceleration, Braking, Cornering, Speeding }
 
 public enum AlertLevel { Yellow, Red }
 
+/// <summary>Where a vehicle's alert thresholds come from: their own boxes, or the coach passengers' limits.</summary>
+public enum AlertSync { Off, Exact, Plus10, Plus20 }
+
 /// <summary>
 /// Where the g-force meter turns yellow and red, in g (the plugin's reading, smoothed over ~0.3 s).
-/// Telematics' harsh-event bands (0.15-0.32 g) caught nearly every ordinary start and stop in the
-/// game, so the defaults sit higher: 0.4 / 0.6 g for coaches, a little more for trucks.
+/// The defaults are the coach passengers' stock limits (see <see cref="FromCoachLimits"/>): yellow where
+/// the game's small satisfaction penalty starts (0.61 g), red where its big one does (1.12 g).
 /// </summary>
 public sealed class DrivingThresholds
 {
-    public double AccelYellow { get; set; } = 0.45;
-    public double AccelRed { get; set; } = 0.65;
-    public double BrakeYellow { get; set; } = 0.45;
-    public double BrakeRed { get; set; } = 0.65;
-    public double CornerYellow { get; set; } = 0.45;
-    public double CornerRed { get; set; } = 0.65;
+    public double AccelYellow { get; set; } = 0.61;
+    public double AccelRed { get; set; } = 1.12;
+    public double BrakeYellow { get; set; } = 0.61;
+    public double BrakeRed { get; set; } = 1.12;
+    public double CornerYellow { get; set; } = 0.61;
+    public double CornerRed { get; set; } = 1.12;
 
-    /// <summary>Heavy goods vehicles.</summary>
-    public static DrivingThresholds Truck => new();
+    /// <summary>The default for any vehicle: the coach mod's stock limits.</summary>
+    public static DrivingThresholds Default => FromCoachLimits(Features.CoachGLimits.Stock);
 
-    /// <summary>Buses and coaches: lower, for the passengers.</summary>
-    public static DrivingThresholds Coach => new()
+    public static DrivingThresholds Truck => Default;
+
+    public static DrivingThresholds Coach => Default;
+
+    /// <summary>The built-in defaults before v0.8, replaced once when they're still in use.</summary>
+    public static bool IsOldDefault(DrivingThresholds t) =>
+        new[] { (0.40, 0.60), (0.45, 0.65) }.Any(d =>
+            new[] { (t.AccelYellow, t.AccelRed), (t.BrakeYellow, t.BrakeRed), (t.CornerYellow, t.CornerRed) }.All(x => x == d));
+
+    /// <summary>
+    /// From the coach passengers' g-force limits: yellow where the small penalty starts, red where the big
+    /// one does. Accelerating and braking share the limit along the coach; cornering takes the one across it.
+    /// <paramref name="factor"/> loosens them (trucks carry no passengers, so a little more can be fine).
+    /// </summary>
+    public static DrivingThresholds FromCoachLimits(Features.CoachGLimits l, double factor = 1)
     {
-        AccelYellow = 0.40, AccelRed = 0.60,
-        BrakeYellow = 0.40, BrakeRed = 0.60,
-        CornerYellow = 0.40, CornerRed = 0.60,
+        static double R(double g) => Math.Round(g, 2);
+        var brakeRed = Features.CoachGLimits.HarshOrDefault(l.Braking, l.HarshBraking);
+        var cornerRed = Features.CoachGLimits.HarshOrDefault(l.Cornering, l.HarshCornering);
+        return new DrivingThresholds
+        {
+            AccelYellow = R(l.Braking * factor), AccelRed = R(brakeRed * factor),
+            BrakeYellow = R(l.Braking * factor), BrakeRed = R(brakeRed * factor),
+            CornerYellow = R(l.Cornering * factor), CornerRed = R(cornerRed * factor),
+        }.Normalised();
+    }
+
+    public static double Factor(AlertSync sync) => sync switch
+    {
+        AlertSync.Plus10 => 1.1,
+        AlertSync.Plus20 => 1.2,
+        _ => 1,
     };
 
     public (double Yellow, double Red) For(DrivingEventKind kind) => kind switch
@@ -44,8 +73,8 @@ public sealed class DrivingThresholds
     {
         static (double, double) Fix(double y, double r)
         {
-            y = Math.Clamp(y, 0.05, 2);
-            return (y, Math.Clamp(r, y, 2));
+            y = Math.Max(y, 0.05);
+            return (y, Math.Max(r, y));
         }
         var (ay, ar) = Fix(AccelYellow, AccelRed);
         var (by, br) = Fix(BrakeYellow, BrakeRed);

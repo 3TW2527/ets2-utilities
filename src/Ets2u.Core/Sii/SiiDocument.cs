@@ -9,7 +9,8 @@ namespace Ets2u.Core.Sii;
 /// </summary>
 public sealed class SiiDocument
 {
-    static readonly Regex UnitHeader = new(@"^\s*(?<type>[\w.]+)\s*:\s*(?<name>[\w.]+)\s*(?<brace>\{)?\s*$");
+    // Types can carry a namespace, e.g. "ui::text_template : txt.dlc_bus.bus_panel".
+    static readonly Regex UnitHeader = new(@"^\s*(?<type>[\w.]+(?:::[\w.]+)*)\s*:\s*(?<name>[\w.]+)\s*(?<brace>\{)?\s*$");
     static readonly Regex Entry = new(@"^(?<lead>\s*)(?<key>[\w]+(?:\[\d*\])?)(?<sep>\s*:\s*)(?<rest>.*?)(?<eol>\r?\n)?$");
 
     readonly List<string> _lines;

@@ -65,7 +65,7 @@ public partial class DrivingAlertsOverlay : Window
         var coach = frame is { } v && _vehicles.IsCoach(v.TruckId);
         if (frame is { } f && (coach ? _settings.CoachAlerts : _settings.TruckAlerts))
         {
-            _detector.Thresholds = (coach ? _settings.CoachThresholds : _settings.TruckThresholds).Normalised();
+            _detector.Thresholds = coach ? _settings.EffectiveCoachThresholds : _settings.EffectiveTruckThresholds;
             foreach (var e in _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs))
                 if (!_shown.Contains(e)) _shown.Add(e);
         }

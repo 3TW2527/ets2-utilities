@@ -31,16 +31,21 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Nav.SelectedItem = ModsPageTab;
         _app.StatusChanged += message => Dispatcher.Invoke(() => StatusText.Text = message);
         _app.Changed += () => Dispatcher.Invoke(RefreshAll);
         Loaded += (_, _) =>
         {
+            InitPages();
             RefreshAll();
             UpdateOverlay();
             // MOUSE DRIVING DISABLED:
             // try { MouseDriveConfig.Write(_app.Settings); }
             // catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppDirs.Log("mouse_drive.ini: " + ex.Message); }
             Run(() => _app.RebuildIfGameUpdated() ?? "Ready");
+            // Liveries are big: check the pack's sources for updates off the UI thread.
+            RunLiveryBuild(progress => _app.RebuildLiveryPackIfChanged(progress), quietWhenNull: true);
+            LoadWorkshopList();
             // The game can reset controls.sii when its control options change: set them up again.
             // if (_app.MouseControlsNeeded && !_app.GameRunning) Run(() => _app.SetMouseControls(true) + "Mouse driving controls set up again.");
         };
@@ -63,8 +68,11 @@ public partial class MainWindow : Window
         RefreshProfiles();
         RefreshHud();
         RefreshDriving();
+        RefreshBusDisplay();
+        RefreshLiveries();
         RefreshInfo();
         RefreshBackups();
+        RefreshModsPage();
         UpdateBanner();
         _loading = false;
     }
@@ -149,6 +157,7 @@ public partial class MainWindow : Window
             box.IsChecked = s.CoachIgnored.HasFlag(Enum.Parse<CoachFactor>((string)box.Tag));
         CoachJobFailureBox.IsChecked = s.CoachIgnored.HasFlag(CoachFactor.JobFailure);
         CoachFullBox.IsChecked = s.CoachFullSatisfaction;
+        RefreshCoachLimits();
         NoDamageStatus.Text = DescribeMod(NoDamage.Mod);
         EarningsStatus.Text = DescribeMod(Earnings.Mod);
         CoachStatus.Text = DescribeMod(CoachComfort.Mod);
@@ -173,17 +182,34 @@ public partial class MainWindow : Window
         XpLabel.Text = $"x{XpSlider.Value:0}";
     }
 
-    void ApplyGameplay_Click(object sender, RoutedEventArgs e) => Run(() =>
+    // Each page saves only its own controls, then every mod is rebuilt (only changed files are written).
+
+    void ApplyNoDamage_Click(object sender, RoutedEventArgs e) => Run(() =>
     {
         _app.Settings.NoDamage = NoDamageBox.IsChecked == true;
+        return _app.ApplyMods();
+    });
+
+    void ApplyEarnings_Click(object sender, RoutedEventArgs e) => Run(() =>
+    {
         _app.Settings.IncomeMultiplier = Math.Round(IncomeSlider.Value);
         _app.Settings.XpMultiplier = Math.Round(XpSlider.Value);
+        return _app.ApplyMods();
+    });
+
+    void ApplyCoach_Click(object sender, RoutedEventArgs e) => Run(() =>
+    {
+        var s = _app.Settings;
+        var limits = ReadCoachLimits();
         var ignored = CoachFactorBoxes.Where(b => b.IsChecked == true)
             .Aggregate(CoachFactor.None, (all, b) => all | Enum.Parse<CoachFactor>((string)b.Tag));
         if (CoachJobFailureBox.IsChecked == true) ignored |= CoachFactor.JobFailure;
-        _app.Settings.CoachIgnored = ignored;
-        _app.Settings.CoachFullSatisfaction = CoachFullBox.IsChecked == true;
-        return _app.ApplyMods();
+        s.CoachIgnored = ignored;
+        s.CoachFullSatisfaction = CoachFullBox.IsChecked == true;
+        s.CoachLimits = limits.IsStock ? null : limits;
+        var result = _app.ApplyMods();
+        UpdateOverlay();
+        return result;
     });
 
     IEnumerable<CheckBox> CoachFactorBoxes => CoachFactorPanel.Children.OfType<CheckBox>();
@@ -360,11 +386,12 @@ public partial class MainWindow : Window
 
         var install = _app.Paths.InstallDir;
         var source = PluginInstaller.FindSource();
-        PluginStatus.Text = source is null ? "The plugin file (ets2u_telemetry.dll) isn't next to the app."
-            : !PluginInstaller.IsInstalled(install) ? "Plugin not installed."
-            : PluginInstaller.IsCurrent(install) ? "Plugin installed. ETS2 shows an \"SDK plugins\" notice when it starts; that's this plugin."
-            : "An older plugin is installed. Install again to update it.";
-        InstallPluginButton.IsEnabled = source is not null && install is not null && !PluginInstaller.IsCurrent(install);
+        PluginStatus.Text = DescribePlugin();
+        var canInstall = source is not null && install is not null;
+        InstallPluginButton.IsEnabled = InstallPluginButton2.IsEnabled = canInstall && !PluginInstaller.IsCurrent(install);
+        // "Reinstall" always works: it also repairs a plugin file that was damaged or replaced.
+        ReinstallPluginButton.IsEnabled = canInstall;
+        ReinstallPluginButton.Content = PluginInstaller.IsInstalled(install) ? "Reinstall plugin" : "Install plugin";
         RemovePluginButton.IsEnabled = PluginInstaller.IsInstalled(install);
 
         OverlayBox.IsChecked = s.SpeedOverlay;
@@ -389,7 +416,7 @@ public partial class MainWindow : Window
     void InstallPlugin_Click(object sender, RoutedEventArgs e) => Run(() =>
     {
         PluginInstaller.Install(_app.Paths.InstallDir ?? throw new InvalidOperationException("ETS2 wasn't found."), _app.Writer);
-        return "Speed plugin installed. Start ETS2 and accept the SDK plugins notice.";
+        return "Plugin installed (speed overlay and driving alerts). Start ETS2 and accept the SDK plugins notice.";
     });
 
     void RemovePlugin_Click(object sender, RoutedEventArgs e) => Run(() =>
@@ -474,9 +501,7 @@ public partial class MainWindow : Window
     {
         var s = _app.Settings;
         var install = _app.Paths.InstallDir;
-        DrivingPluginStatus.Text = !PluginInstaller.IsInstalled(install) ? "The plugin isn't installed yet: install it on the HUD & Dash tab."
-            : PluginInstaller.IsCurrent(install) ? "Plugin installed."
-            : "An older plugin is installed: install it again on the HUD & Dash tab, or these won't work.";
+        DrivingPluginStatus.Text = DescribePlugin();
 
         // MOUSE DRIVING DISABLED:
         // MouseDriveBox.IsChecked = s.MouseDrive;
@@ -495,7 +520,10 @@ public partial class MainWindow : Window
 
         CoachAlertsBox.IsChecked = s.CoachAlerts;
         TruckAlertsBox.IsChecked = s.TruckAlerts;
+        CoachSyncBox.IsChecked = s.CoachAlertSync;
+        TruckSyncBox.SelectedValue = s.TruckAlertSync;
         ShowThresholds(s.CoachThresholds, s.TruckThresholds);
+        ShowSyncedThresholds();
         SpeedingBox.IsChecked = s.SpeedingAlerts;
         AlertsStatus.Text = DescribeAlerts(s);
     }
@@ -538,9 +566,9 @@ public partial class MainWindow : Window
     }
 
     static double ReadG(TextBox box, string name) =>
-        double.TryParse(box.Text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 && v <= 2
+        double.TryParse(box.Text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v >= 0.05
             ? v
-            : throw new FormatException($"{name}: enter a g-force between 0.05 and 2, such as 0.25.");
+            : throw new FormatException($"{name}: enter a g-force of at least 0.05, such as 0.61.");
 
     // MOUSE DRIVING DISABLED:
     // void ApplyMouseDrive_Click(object sender, RoutedEventArgs e) => Run(() =>
@@ -563,8 +591,11 @@ public partial class MainWindow : Window
     void ApplyAlerts_Click(object sender, RoutedEventArgs e) => Run(() =>
     {
         var s = _app.Settings;
-        s.CoachThresholds = ReadThresholds(coach: true);
-        s.TruckThresholds = ReadThresholds(coach: false);
+        s.CoachAlertSync = CoachSyncBox.IsChecked == true;
+        s.TruckAlertSync = TruckSyncBox.SelectedValue is AlertSync t ? t : AlertSync.Off;
+        // Synced boxes show the derived values; the vehicle's own ones are kept for when sync is turned off.
+        if (!s.CoachAlertSync) s.CoachThresholds = ReadThresholds(coach: true);
+        if (s.TruckAlertSync == AlertSync.Off) s.TruckThresholds = ReadThresholds(coach: false);
         s.CoachAlerts = CoachAlertsBox.IsChecked == true;
         s.TruckAlerts = TruckAlertsBox.IsChecked == true;
         s.SpeedingAlerts = SpeedingBox.IsChecked == true;
@@ -573,7 +604,52 @@ public partial class MainWindow : Window
         return DescribeAlerts(s);
     });
 
-    void DefaultThresholds_Click(object sender, RoutedEventArgs e) => ShowThresholds(DrivingThresholds.Coach, DrivingThresholds.Truck);
+    /// <summary>The defaults for both: the coach mod's limits (yellow = normal, red = harsh).</summary>
+    void DefaultThresholds_Click(object sender, RoutedEventArgs e)
+    {
+        var limits = DrivingThresholds.FromCoachLimits(_app.Settings.AlertLimits);
+        ShowThresholds(limits, limits);
+        ShowSyncedThresholds();
+    }
+
+    static readonly Dictionary<AlertSync, string> TruckSyncNames = new()
+    {
+        [AlertSync.Off] = "Their own thresholds (below)",
+        [AlertSync.Exact] = "Same as the coach limits",
+        [AlertSync.Plus10] = "Coach limits + 10%",
+        [AlertSync.Plus20] = "Coach limits + 20%",
+    };
+
+    void AlertSync_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loading) ShowSyncedThresholds();
+    }
+
+    /// <summary>Synced columns show the values the alerts will use, and can't be typed in.</summary>
+    void ShowSyncedThresholds()
+    {
+        static string F(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
+        var limits = _app.Settings.AlertLimits;
+        var truckSync = TruckSyncBox.SelectedValue is AlertSync t ? t : AlertSync.Off;
+        foreach (var (isCoach, synced, factor) in new[]
+                 {
+                     (true, CoachSyncBox.IsChecked == true, 1.0),
+                     (false, truckSync != AlertSync.Off, DrivingThresholds.Factor(truckSync)),
+                 })
+        {
+            var boxes = ThresholdBoxes(isCoach);
+            foreach (var (yellow, red, _) in boxes) yellow.IsEnabled = red.IsEnabled = !synced;
+            if (!synced) continue;
+            var d = DrivingThresholds.FromCoachLimits(limits, factor);
+            (boxes[0].Yellow.Text, boxes[0].Red.Text) = (F(d.AccelYellow), F(d.AccelRed));
+            (boxes[1].Yellow.Text, boxes[1].Red.Text) = (F(d.BrakeYellow), F(d.BrakeRed));
+            (boxes[2].Yellow.Text, boxes[2].Red.Text) = (F(d.CornerYellow), F(d.CornerRed));
+        }
+        var source = _app.Settings.CoachLimits is null ? "the stock limits (the coach mod doesn't change them yet)" : "your limits on the Coach passengers page";
+        CoachThresholdNote.Text = CoachSyncBox.IsChecked == true || truckSync != AlertSync.Off
+            ? $"Greyed-out columns come from {source}; change them there."
+            : "";
+    }
 
     // ---------- Game Information ----------
 

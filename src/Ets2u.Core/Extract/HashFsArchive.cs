@@ -116,7 +116,14 @@ public sealed class HashFsArchive : IGameArchive, IDisposable
     /// doesn't have the directory. A listing is a count, one length byte per name, then the names;
     /// subdirectory names start with '/'.
     /// </summary>
-    public IReadOnlyList<string>? ListFiles(string gameDir)
+    public IReadOnlyList<string>? ListFiles(string gameDir) =>
+        ListDirectory(gameDir) is { } all ? all.Where(n => !n.StartsWith('/')).ToList() : null;
+
+    /// <summary>
+    /// Everything directly in a directory: file names, and subdirectory names with a leading '/'.
+    /// Null if this archive doesn't have the directory. The root is "".
+    /// </summary>
+    public IReadOnlyList<string>? ListDirectory(string gameDir)
     {
         if (!_entries.TryGetValue(Key(gameDir), out var e) || !e.IsDirectory) return null;
         var stored = ReadAt(e.Offset, e.StoredSize);
@@ -126,11 +133,25 @@ public sealed class HashFsArchive : IGameArchive, IDisposable
         var at = 4 + count;
         for (var i = 0; i < count; i++)
         {
-            var name = System.Text.Encoding.UTF8.GetString(data.Slice(at, data[4 + i]));
+            names.Add(System.Text.Encoding.UTF8.GetString(data.Slice(at, data[4 + i])));
             at += data[4 + i];
-            if (!name.StartsWith('/')) names.Add(name);
         }
         return names;
+    }
+
+    /// <summary>Every file path under a directory (recursively), e.g. "def/vehicle/bus/x/data.sii".</summary>
+    public IEnumerable<string> EnumerateFiles(string gameDir = "")
+    {
+        var dir = gameDir.Trim('/');
+        if (ListDirectory(dir) is not { } names) yield break;
+        foreach (var name in names)
+        {
+            if (name.StartsWith('/'))
+            {
+                foreach (var f in EnumerateFiles(dir.Length == 0 ? name[1..] : dir + name)) yield return f;
+            }
+            else yield return dir.Length == 0 ? name : dir + "/" + name;
+        }
     }
 
     public int EntryCount => _entries.Count;

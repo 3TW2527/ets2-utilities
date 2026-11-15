@@ -90,11 +90,35 @@ def route(d, a):
     d.polygon(p(tip, left, right), fill=TEXT)
 
 
+def bus_display(d, a):
+    # Destination display: dark panel with a row of LED dots.
+    d.rounded_rectangle(p((14, 58), (106, 104)), radius=6 * S, fill=(60, 64, 76))
+    d.rectangle(p((20, 64), (100, 98)), fill=(10, 11, 14))
+    for row in range(5):
+        for col in range(13):
+            on = (row + col * 3) % 4 != 0 and row in (1, 2, 3)
+            x, y = 25 + col * 6, 69 + row * 6
+            d.ellipse(p((x - 2, y - 2), (x + 2, y + 2)), fill=a if on else (34, 36, 42))
+
+
+def liveries(d, a):
+    # Three fanned paint swatches.
+    for i, col in enumerate([(84, 150, 230), (236, 178, 46), a]):
+        ang = math.radians(-24 + i * 24)
+        cx, cy, w, h = 60, 118, 18, 70
+        corners = [(-w, 0), (w, 0), (w, -h), (-w, -h)]
+        pts = [(cx + x * math.cos(ang) - y * math.sin(ang), cy + x * math.sin(ang) + y * math.cos(ang)) for x, y in corners]
+        d.polygon(p(*pts), fill=col, outline=(16, 18, 24))
+    d.ellipse(p((55, 113), (65, 123)), fill=TEXT)
+
+
 MODS = {
     "ets2u_nodamage": ("No damage", (76, 175, 120), no_damage),
     "ets2u_economy": ("Bigger\nearnings", (236, 178, 46), earnings),
     "ets2u_coach": ("Coach\ncomfort", (84, 150, 230), coach),
     "ets2u_ui": ("Route advisor\nposition", (214, 98, 74), route),
+    "ets2u_busdisplay": ("Destination\ndisplay", (250, 176, 3), bus_display),
+    "ets2u_liveries": ("Livery\npack", (200, 90, 200), liveries),
 }
 
 for name, (title, accent, art) in MODS.items():

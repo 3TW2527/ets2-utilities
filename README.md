@@ -2,23 +2,75 @@
 
 A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on and off for truck and coach profiles:
 
-| Tab | What it does | How |
+The app has one page per mod or feature, grouped in a list on the left:
+
+| Page | What it does | How |
 | --- | --- | --- |
-| Gameplay | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
-| Gameplay | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
-| Gameplay | Choose what lowers coach passenger satisfaction (driving style, lateness, speeding, crashes, wear, offences), turn off g-force job failure, board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
-| Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
-| HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
-| HUD & Dash | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
-| Driving | OMSI-style mouse driving: the mouse's place across the screen steers (heavier with speed), above or below the middle is throttle or brake | Input device in `ets2u_telemetry.dll`; steering lines in each profile's `controls.sii` |
-| Driving | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks (0.4 / 0.6 g for coaches, 0.45 / 0.65 g for trucks) | Telemetry plugin + on-screen overlay |
-| Game Information | Fuel price per country, and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs`, the installed `dlc_*.scs` and `locale.scs` |
-| Backups | Undo any change the app made | Copies taken before every write |
+| **Overview** · Mods & plugins | Every mod and plugin the app makes, its file and state; rebuild all mods, (re)install or remove the plugin | |
+| **Overview** · Game & profiles | Where the game, mods and profiles are | |
+| **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
+| **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
+| **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
+| **Mods** · Route advisor | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
+| **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
+| **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
+| **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
+| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; both default to the coach mod's g-force limits (yellow = normal, red = harsh: 0.61 / 1.12 g in stock); coaches stay synced to them, and trucks can be synced too, as they are or +10% / +20% | Telemetry plugin + on-screen overlay |
+| **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
+| **Tools** · Game information | Fuel price per country, and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs`, the installed `dlc_*.scs` and `locale.scs` |
+| **Tools** · Backups | Undo any change the app made (except the livery pack, which is rebuilt from its sources) | Copies taken before every write |
 
 Mods are built from the game's own files, read straight out of its `.scs` archives (a few milliseconds,
 nothing extracted). When the game updates, the app rebuilds them on its next start. Every generated mod
 is marked `mp_mod_optional`, so you can join Convoy sessions that allow optional mods without the other
 players having them.
+
+## Coach g-forces
+
+The game decides when coach passengers complain in `def/bus_economy_data.sii`, in m/s² per direction
+(x across the coach, y up, z along it): a normal limit (6 m/s², 0.61 g, in every direction), a harsh one
+(only along the coach, 11 m/s², 1.12 g) and a job-failure limit (along the coach, 22 m/s²). The Workshop's
+"Realistic Coach G-Force" mod raises the two limits to 13 m/s². This app's version lets you set each
+direction and tier on its own, in g, with Stock / Forgiving / Relaxed starting points, and keeps every
+penalty and reward (only where they start moves). Every direction gets a harsh limit: the game has one for
+braking only, so a corner taken far too fast costs no more than a slightly brisk one. The Stock starting
+point keeps the game's numbers and uses its braking harsh limit (1.12 g) in every direction.
+
+The driving alerts use these limits by default in coaches: yellow at the normal limit, red at the harsh one
+(accelerating and braking use the limit along the coach, cornering the one across it). Trucks' own thresholds
+start from the same values; they can also be synced to the coach limits, exactly or 10% / 20% looser. Until the coach mod changes the
+limits, the alerts use the Stock ones. It's part of the Coach comfort mod, because both change the same
+file; turn off other mods that change `bus_economy_data.sii`, or only one of them wins.
+
+## Destination display
+
+The coaches' front display ("standard destination display" upgrade) is a small UI window
+(`ui/dashboard/bus_panel_generic.sii` in `dlc_bus.scs`) whose one text element the game fills with the
+job's destination, through the template `txt.dlc_bus.bus_panel` in `ui/template/dashboard_text.dlc_bus.sii`:
+font, size, colour, and `%0` for the game's text. The mod ships that template with your text instead of
+(or around, with `{destination}`) the `%0`, so it shows without a job too, whenever the ignition is on.
+
+Limits: one line of up to 60 characters, in the game's own font (Latin script; other scripts may not
+show). The game reads UI files when it starts, so a new text needs a restart; the SDK gives plugins no
+way to write to the display while driving. The saved-texts list is a plain text file
+(`%APPDATA%\ets2u\destination_texts.txt`, one `route | text` per line), searched from disk, so it can hold
+millions of lines.
+
+## Livery pack
+
+Every new livery comes as its own mod. The Livery pack page puts the ones you choose into one mod,
+`ets2u_liveries_<tag>.scs` (your own tag, like every mod here, and optional for Convoy). Sources can be
+local mods (`.scs` as zip or HashFS v2, `.zip`, or an unpacked folder) or Steam Workshop items you're
+subscribed to; paste a Workshop link to open it in Steam and subscribe. For a Workshop item the app picks
+the package the game would load for its version (`versions.sii`). Files at a mod's root (manifest,
+pictures) are left out; if two mods hold the same file, the one higher in the list wins and the clash is
+shown. On every start the app checks the sources (Steam updates Workshop items by itself) and rebuilds the
+pack when one changed; a source that's gone stops the rebuild instead of silently dropping its liveries.
+
+**Only repack Workshop items whose creators allow editing and redistribution.** The app asks you to
+confirm this before it builds a pack that contains Workshop items, and lists every creator in the pack's
+description. Don't share a pack with other people's work in it without their permission. After enabling
+the pack, turn the original livery mods off in Mod Manager (keep them subscribed: the pack is built from them).
 
 ## Install
 
@@ -27,7 +79,7 @@ players having them.
 3. Close ETS2, run `ets2u.exe`. Changes to mods apply the next time the game starts; enable each new
    "ETS2 Utilities" mod once in Mod Manager.
 
-Every change is backed up first (Backups tab). Don't use edited saves or the plugin on TruckersMP.
+Every change is backed up first (Backups page). Don't use edited saves or the plugin on TruckersMP.
 
 ## Playing in Convoy (SCS multiplayer)
 
@@ -63,7 +115,9 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Feature | In Convoy |
 | --- | --- |
 | No damage | Applies to your own truck or coach only |
-| Coach comfort | Applies to your own passengers only |
+| Coach comfort and g-force limits | Applies to your own passengers only |
+| Destination display | Only changes what you see on your own coach |
+| Livery pack | Others see your livery only if they have it too; the pack is optional for them |
 | Map position | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
@@ -78,7 +132,7 @@ Don't use any of this on TruckersMP, which has its own rules and anti-cheat.
 > lines in `plugin\ets2u_telemetry.def`). The Core classes (`MouseDriveConfig`, `MouseDriveControls`) and
 > `MouseDriveIndicator` are kept but unused. The text below describes the feature as it was.
 
-Install the plugin (HUD & Dash tab), tick **Let the mouse drive** on the Driving tab, then press F8
+Install the plugin (Mods & plugins page), tick **Let the mouse drive** on the Driving alerts page, then press F8
 (or Insert, or the middle mouse button) while driving to switch it on and off. It works the way
 OMSI 2 does; the maths follows [openOMSI](https://github.com/openOMSI-org/openOMSI)'s port of Omsi.exe:
 
@@ -145,6 +199,7 @@ dotnet test
 | Generated mods | `Documents\Euro Truck Simulator 2\mod\ets2u_*.scs` |
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
 | Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
+| Saved destination display texts | `%APPDATA%\ets2u\destination_texts.txt` |
 
 Never commit game files or SCS tools; `.gitignore` excludes them.
 
@@ -152,7 +207,8 @@ Never commit game files or SCS tools; `.gitignore` excludes them.
 
 - Coaches share the truck bank (`money_account`) but level up separately (`bus_experience_points`).
 - Coach jobs have no pay or XP rates in the game files, so "bigger earnings" is trucks only.
-- Coach satisfaction rules live in `def/bus_economy_data.sii`; the coach mod zeroes its penalties only, not its rewards.
+- Coach satisfaction rules live in `def/bus_economy_data.sii`; the coach mod zeroes its penalties only, not its rewards,
+  and moves the g-force limits (see Coach g-forces).
 - Save decryption and the binary save (BSII) value types follow [SII_Decrypt](https://github.com/TheLazyTomcat/SII_Decrypt).
   Game 1.62 writes BSII version 3, which adds types 0x3B-0x3E (IDs and arrays of IDs). Money (s64) and both XP
   counters (u32) are fixed-size, so a binary save is edited by overwriting those bytes; the edited file is written

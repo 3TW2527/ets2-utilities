@@ -47,7 +47,7 @@ public sealed class AppSettings
     public bool SpeedingAlerts { get; set; } = true;
     /// <summary>Which defaults the saved thresholds came from; older ones are replaced on load.</summary>
     public int AlertDefaults { get; set; }
-    public const int CurrentAlertDefaults = 2;
+    public const int CurrentAlertDefaults = 4;
 
     /// <summary>v0.7 previews' single switch; read once and turned into <see cref="CoachAlerts"/> and <see cref="TruckAlerts"/>.</summary>
     public bool? DrivingAlerts { get; set; }
@@ -55,6 +55,37 @@ public sealed class AppSettings
     /// <summary>Factors that no longer lower coach passenger satisfaction.</summary>
     public Features.CoachFactor CoachIgnored { get; set; }
     public bool CoachFullSatisfaction { get; set; }
+
+    /// <summary>When passengers notice g-forces; null = the game's own limits.</summary>
+    public Features.CoachGLimits? CoachLimits { get; set; }
+
+    /// <summary>Coach alerts use the passengers' g-force limits (yellow = normal, red = harsh) instead of their own boxes.</summary>
+    public bool CoachAlertSync { get; set; } = true;
+
+    /// <summary>Truck alerts can use the coach limits too, as they are or a little looser.</summary>
+    public Telemetry.AlertSync TruckAlertSync { get; set; }
+
+    /// <summary>The coach limits the alerts sync to: the player's, or the stock ones (harsh in every direction).</summary>
+    [JsonIgnore]
+    public Features.CoachGLimits AlertLimits => CoachLimits ?? Features.CoachGLimits.Stock;
+
+    /// <summary>The thresholds the alerts use in a coach.</summary>
+    [JsonIgnore]
+    public Telemetry.DrivingThresholds EffectiveCoachThresholds =>
+        CoachAlertSync ? Telemetry.DrivingThresholds.FromCoachLimits(AlertLimits) : CoachThresholds.Normalised();
+
+    /// <summary>The thresholds the alerts use in a truck.</summary>
+    [JsonIgnore]
+    public Telemetry.DrivingThresholds EffectiveTruckThresholds =>
+        TruckAlertSync == Telemetry.AlertSync.Off
+            ? TruckThresholds.Normalised()
+            : Telemetry.DrivingThresholds.FromCoachLimits(AlertLimits, Telemetry.DrivingThresholds.Factor(TruckAlertSync));
+
+    /// <summary>Text on the coaches' front destination display.</summary>
+    public Features.BusDisplaySettings BusDisplay { get; set; } = new();
+
+    /// <summary>Liveries from several mods packed into one.</summary>
+    public Liveries.LiveryPackSettings LiveryPack { get; set; } = new();
 
     /// <summary>v0.3's single "satisfaction never drops" switch; read once and turned into <see cref="CoachIgnored"/>.</summary>
     public bool? CoachNoPenalties { get; set; }
@@ -87,13 +118,23 @@ public sealed class AppSettings
             settings.CoachNoPenalties = null;
             if (settings.DrivingAlerts == true) settings.CoachAlerts = settings.TruckAlerts = true;
             settings.DrivingAlerts = null;
-            if (settings.AlertDefaults < CurrentAlertDefaults)
+            if (settings.AlertDefaults < 2)
             {
                 // The first thresholds alerted on nearly every start and stop.
                 settings.CoachThresholds = Telemetry.DrivingThresholds.Coach;
                 settings.TruckThresholds = Telemetry.DrivingThresholds.Truck;
-                settings.AlertDefaults = CurrentAlertDefaults;
             }
+            // v0.8: coach alerts follow the passengers' g-force limits unless switched off afterwards.
+            if (settings.AlertDefaults < 3) settings.CoachAlertSync = true;
+            // v0.8: the defaults are the coach mod's limits; thresholds still on the old defaults move to them.
+            if (settings.AlertDefaults < 4)
+            {
+                if (Telemetry.DrivingThresholds.IsOldDefault(settings.CoachThresholds))
+                    settings.CoachThresholds = Telemetry.DrivingThresholds.FromCoachLimits(settings.AlertLimits);
+                if (Telemetry.DrivingThresholds.IsOldDefault(settings.TruckThresholds))
+                    settings.TruckThresholds = Telemetry.DrivingThresholds.FromCoachLimits(settings.AlertLimits);
+            }
+            settings.AlertDefaults = CurrentAlertDefaults;
             return settings;
         }
         catch (JsonException)

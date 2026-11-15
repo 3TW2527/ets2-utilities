@@ -3,6 +3,7 @@ using Ets2u.Core;
 using Ets2u.Core.Extract;
 using Ets2u.Core.Features;
 using Ets2u.Core.Info;
+using Ets2u.Core.Liveries;
 using Ets2u.Core.Mods;
 using Ets2u.Core.Paths;
 using Ets2u.Core.Safety;
@@ -157,6 +158,93 @@ public sealed class AppServices
                 ? "ETS2 was updated. Close the game and reopen this app to update the mods."
                 : "This version of the app updates your mods. Close the game and reopen this app to update them.";
         return (gameUpdated ? $"ETS2 was updated to {Paths.GameVersion}. " : "") + ApplyMods();
+    }
+
+    // ---------- Livery pack ----------
+
+    public ModSpec LiveryMod => Mine(LiveryPack.Mod);
+
+    public string LiveryPackPath => Path.Combine(Paths.ModDir, LiveryMod.FileName);
+
+    public bool LiveryPackExists => File.Exists(LiveryPackPath);
+
+    /// <summary>The pack is on, has sources, and they changed since it was built (or it was never built).</summary>
+    public bool LiveryPackOutdated(out IReadOnlyList<(LiverySource Source, string Problem)> missing)
+    {
+        var s = Settings.LiveryPack;
+        missing = [];
+        if (!s.Enabled || !s.Sources.Any(x => x.Included)) return false;
+        missing = LiveryPack.Missing(s.Sources, Paths);
+        return !LiveryPackExists || LiveryPack.Fingerprint(s.Sources, Paths) != s.BuiltFingerprint;
+    }
+
+    /// <summary>
+    /// Builds the pack from the included sources, or removes it when switched off. The pack is written
+    /// beside its final name and then swapped in. It isn't backed up: it's made entirely from the source
+    /// mods, which stay where they are, and copies of a pack of big textures would fill the backups.
+    /// </summary>
+    public string BuildLiveryPack(Action<int, int>? progress = null)
+    {
+        if (GameRunning) throw new GameRunningException();
+        var s = Settings.LiveryPack;
+        var path = LiveryPackPath;
+        if (!s.Enabled || !s.Sources.Any(x => x.Included))
+        {
+            if (!File.Exists(path)) return "The livery pack is off.";
+            File.Delete(path);
+            s.BuiltFingerprint = null;
+            Settings.Save();
+            Changed?.Invoke();
+            return $"Removed {Path.GetFileName(path)}.";
+        }
+        if (s.Sources.Any(x => x.Included && x.Kind == LiverySourceKind.Workshop) && !s.WorkshopPermissionConfirmed)
+            throw new InvalidOperationException("Confirm that the creators of the Workshop items allow editing and redistribution before building.");
+
+        var fingerprint = LiveryPack.Fingerprint(s.Sources, Paths);
+        // Its own reader: this runs off the UI thread, which may be reading the game's files too.
+        using var game = Paths.InstallDir is null ? null : new GameArchives(Paths.InstallDir);
+        var plan = LiveryPack.Plan(s.Sources, Paths, game);
+        if (plan.Files.Count == 0)
+            throw new InvalidOperationException("None of the included mods could be read: " +
+                                                string.Join("; ", plan.Sources.Select(r => $"{r.Source.Name}: {r.Problem}")));
+
+        Directory.CreateDirectory(Paths.ModDir);
+        var temp = path + ".ets2u-tmp";
+        try
+        {
+            using (var file = File.Create(temp))
+                LiveryPack.Write(file, LiveryMod, plan, Paths, progress);
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+        s.BuiltFingerprint = fingerprint;
+        Settings.Save();
+        Changed?.Invoke();
+
+        var used = plan.Sources.Count(r => r.Problem is null);
+        var message = $"Built {Path.GetFileName(path)}: {plan.PaintJobs} paint job(s) from {used} mod(s), " +
+                      $"{new FileInfo(path).Length / 1048576.0:0} MB.";
+        var skipped = plan.Sources.Where(r => r.Problem is not null).ToList();
+        if (skipped.Count > 0) message += " Left out: " + string.Join("; ", skipped.Select(r => $"{r.Source.Name} ({r.Problem})")) + ".";
+        if (plan.Conflicts.Count > 0) message += $" {plan.Conflicts.Count} file(s) clash between mods; the one higher in the list is used.";
+        return message + " Restart ETS2 to apply.";
+    }
+
+    /// <summary>
+    /// On start: rebuild the pack when a source changed (Steam updated a Workshop item, a local mod was
+    /// replaced). A source that's gone stops the rebuild, so a pack never silently loses liveries.
+    /// </summary>
+    public string? RebuildLiveryPackIfChanged(Action<int, int>? progress = null)
+    {
+        if (!LiveryPackOutdated(out var missing)) return null;
+        if (missing.Count > 0)
+            return "Livery pack: can't update, " + string.Join("; ", missing.Select(m => $"{m.Source.Name}: {m.Problem}")) +
+                   ". Fix or untick it on the Livery pack page.";
+        if (GameRunning) return "A livery mod in your pack was updated. Close the game and reopen this app to update the pack.";
+        return "A livery mod in your pack changed. " + BuildLiveryPack(progress);
     }
 
     /// <summary>Profiles whose controls.sii is set up for mouse driving, and those that aren't.</summary>
