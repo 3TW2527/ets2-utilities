@@ -572,20 +572,38 @@
                         END OF MOUSE DRIVING -->
 
                         <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
-                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds (both start from the coach mod&apos;s limits); the app tells which you&apos;re driving. Speeding always shows in red. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
+                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds (below); the app tells which you&apos;re driving. Speeding always shows in red. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <CheckBox x:Name="CoachAlertsBox" Content="In coaches" Margin="0,0,24,0"/>
                             <CheckBox x:Name="TruckAlertsBox" Content="In trucks"/>
                         </StackPanel>
+                        <CheckBox x:Name="GMeterBox" Margin="0,10,0,0" Click="GMeter_Click" FontWeight="SemiBold"
+                                  Content="Show the live g-force meter (now and peak in each direction, coloured by these thresholds)"/>
+                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
+                                   Text="A small floating window with the same reading the alerts use. Drag it where you like; it never takes the game's focus. Works whether the alerts are on or off. Up-and-down g isn't shown: the plugin doesn't send it, and no alert uses it."/>
                         <TextBlock Style="{StaticResource H}" Text="Thresholds"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="By default the alerts use the passengers' g-force limits from the Coach passengers page: yellow where passengers start to complain (normal limit), red where they complain a lot (harsh limit). Accelerating and braking use the limit along the coach, cornering the one across it."/>
-                        <CheckBox x:Name="CoachSyncBox" Margin="0,4,0,0" Click="AlertSync_Changed"
-                                  Content="Coaches: use the passengers' limits exactly"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="Trucks:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <ComboBox x:Name="TruckSyncBox" Width="260" SelectionChanged="AlertSync_Changed"/>
-                        </StackPanel>
+                                   Text="Coaches and trucks each take their thresholds from one of: the defaults (coaches 0.35 / 0.7 g, trucks 0.4 / 0.8 g, in every direction); the coach mod (the passengers' g-force limits on the Coach passengers page: yellow at the normal limit, red at the harsh one, cornering from the limit across the coach, accelerating and braking from the one along it); or your own numbers. The defaults and the coach mod can be relaxed by 10% or 20%."/>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="160"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Column="1" Text="Thresholds from" Foreground="#5A5A5A"/>
+                            <TextBlock Grid.Column="2" Text="Relax" Foreground="#5A5A5A"/>
+                            <TextBlock Grid.Row="1" Text="Coaches" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="CoachSourceBox" Grid.Row="1" Grid.Column="1" Margin="0,3,8,3" SelectionChanged="AlertSource_Changed"/>
+                            <ComboBox x:Name="CoachRelaxBox" Grid.Row="1" Grid.Column="2" Margin="0,3,8,3" SelectionChanged="AlertSource_Changed"/>
+                            <TextBlock Grid.Row="2" Text="Trucks" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="TruckSourceBox" Grid.Row="2" Grid.Column="1" Margin="0,3,8,3" SelectionChanged="AlertSource_Changed"/>
+                            <ComboBox x:Name="TruckRelaxBox" Grid.Row="2" Grid.Column="2" Margin="0,3,8,3" SelectionChanged="AlertSource_Changed"/>
+                        </Grid>
                         <Grid Margin="20,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="130"/>

@@ -135,6 +135,17 @@ int main(int argc, char **argv)
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0
               && strcmp(reinterpret_cast<const char *>(raw + 12), "vehicle.man.lions_24") == 0;
 
+    // A steady left turn: 20 m/s forward (-z), yawing left at 0.05 rotations per second (+y), and no
+    // change in the velocity seen from the truck, so the acceleration channel reads zero. The cab still
+    // feels speed x yaw rate = 20 x 0.314 = 6.28 m/s2 = 0.64 g towards the left (right = -0.64 g).
+    send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, 0.0f, 0.0f, 0.0f);
+    send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_velocity, 0.0f, 0.0f, -20.0f);
+    send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_angular_velocity, 0.0f, 0.05f, 0.0f);
+    for (int i = 0; i < 6; i++) { g_events[SCS_TELEMETRY_EVENT_frame_end](SCS_TELEMETRY_EVENT_frame_end, nullptr, nullptr); Sleep(250); }
+    printf("turning: fwd=%.3fg right=%.3fg\n", f[6], f[7]);
+    // Six frames of 0.2 s smoothed over 0.3 s: within 2%% of the steady value.
+    ok = ok && f[7] < -0.60f && f[7] > -0.66f && f[6] > -0.03f && f[6] < 0.03f;
+
     g_events[SCS_TELEMETRY_EVENT_paused](SCS_TELEMETRY_EVENT_paused, nullptr, nullptr);
     ok = ok && raw[3] == 1;
 

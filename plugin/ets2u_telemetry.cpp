@@ -69,6 +69,8 @@ static Ets2uTelemetry *g_shared = nullptr;
 static scs_log_t g_log = nullptr;
 
 static scs_value_fvector_t g_accel = {};
+static scs_value_fvector_t g_velocity = {};         // vehicle space, m/s
+static scs_value_fvector_t g_angular_velocity = {}; // vehicle space, rotations per second
 static float g_effective_steering = 0.0f; // counterclockwise: + is left
 static float g_input_steering = 0.0f;     // what the game took from the controls, counterclockwise
 static LARGE_INTEGER g_frequency = {};
@@ -133,12 +135,21 @@ static SCSAPI_VOID store_fvector(const scs_string_t, const scs_u32_t, const scs_
 static SCSAPI_VOID on_frame_end(const scs_event_t, const void *const, const scs_context_t)
 {
     if (!g_shared) return;
-    // Vehicle space: x right, y up, z backwards. The raw value shakes with every bump in the road,
-    // so it is smoothed the way a telematics box filters its accelerometer.
+    // Vehicle space: x right, y up, z backwards. truck.local.acceleration.linear is how the velocity seen
+    // from the truck changes, which leaves out the turning: in a steady corner that velocity is always
+    // "straight ahead", so the channel reads ~0 sideways. What an accelerometer in the cab (and the
+    // passengers) feel adds the turn, angular velocity x velocity (for cornering: speed x yaw rate).
+    const float two_pi = 6.2831853f;
+    const float wx = g_angular_velocity.x * two_pi, wy = g_angular_velocity.y * two_pi, wz = g_angular_velocity.z * two_pi;
+    const float vx = g_velocity.x, vy = g_velocity.y, vz = g_velocity.z;
+    const float ax = g_accel.x + (wy * vz - wz * vy);
+    const float az = g_accel.z + (wx * vy - wy * vx);
+    // The raw value shakes with every bump in the road, so it is smoothed the way a telematics box
+    // filters its accelerometer.
     const float dt = seconds_since(g_last_frame);
     const float k = 1.0f - std::exp(-dt / kAccelSmoothing);
-    g_shared->accel_forward_g += (-g_accel.z / kGravity - g_shared->accel_forward_g) * k;
-    g_shared->accel_right_g += (g_accel.x / kGravity - g_shared->accel_right_g) * k;
+    g_shared->accel_forward_g += (-az / kGravity - g_shared->accel_forward_g) * k;
+    g_shared->accel_right_g += (ax / kGravity - g_shared->accel_right_g) * k;
     InterlockedIncrement(reinterpret_cast<volatile LONG *>(&g_shared->sequence));
 }
 
@@ -188,6 +199,10 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_limit_ms);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, SCS_U32_NIL, SCS_VALUE_TYPE_fvector,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_fvector, &g_accel);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_velocity, SCS_U32_NIL, SCS_VALUE_TYPE_fvector,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_fvector, &g_velocity);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_local_angular_velocity, SCS_U32_NIL, SCS_VALUE_TYPE_fvector,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_fvector, &g_angular_velocity);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_effective_steering, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_effective_steering);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_input_steering, SCS_U32_NIL, SCS_VALUE_TYPE_float,

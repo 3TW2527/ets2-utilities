@@ -45,9 +45,14 @@ public sealed class AppSettings
     public Telemetry.DrivingThresholds CoachThresholds { get; set; } = Telemetry.DrivingThresholds.Coach;
     public Telemetry.DrivingThresholds TruckThresholds { get; set; } = Telemetry.DrivingThresholds.Truck;
     public bool SpeedingAlerts { get; set; } = true;
+
+    /// <summary>The floating live g-force meter, and where it was dragged to (null = the default place).</summary>
+    public bool GForceMeter { get; set; }
+    public double? GForceMeterLeft { get; set; }
+    public double? GForceMeterTop { get; set; }
     /// <summary>Which defaults the saved thresholds came from; older ones are replaced on load.</summary>
     public int AlertDefaults { get; set; }
-    public const int CurrentAlertDefaults = 4;
+    public const int CurrentAlertDefaults = 6;
 
     /// <summary>v0.7 previews' single switch; read once and turned into <see cref="CoachAlerts"/> and <see cref="TruckAlerts"/>.</summary>
     public bool? DrivingAlerts { get; set; }
@@ -59,11 +64,15 @@ public sealed class AppSettings
     /// <summary>When passengers notice g-forces; null = the game's own limits.</summary>
     public Features.CoachGLimits? CoachLimits { get; set; }
 
-    /// <summary>Coach alerts use the passengers' g-force limits (yellow = normal, red = harsh) instead of their own boxes.</summary>
-    public bool CoachAlertSync { get; set; } = true;
+    /// <summary>Where each vehicle's alert thresholds come from, and how much looser they are.</summary>
+    public Telemetry.AlertSource CoachAlertSource { get; set; }
+    public Telemetry.AlertRelax CoachAlertRelax { get; set; }
+    public Telemetry.AlertSource TruckAlertSource { get; set; }
+    public Telemetry.AlertRelax TruckAlertRelax { get; set; }
 
-    /// <summary>Truck alerts can use the coach limits too, as they are or a little looser.</summary>
-    public Telemetry.AlertSync TruckAlertSync { get; set; }
+    /// <summary>v0.8 previews' sync switches; read once and turned into the sources above.</summary>
+    public bool? CoachAlertSync { get; set; }
+    public string? TruckAlertSync { get; set; }
 
     /// <summary>The coach limits the alerts sync to: the player's, or the stock ones (harsh in every direction).</summary>
     [JsonIgnore]
@@ -71,15 +80,13 @@ public sealed class AppSettings
 
     /// <summary>The thresholds the alerts use in a coach.</summary>
     [JsonIgnore]
-    public Telemetry.DrivingThresholds EffectiveCoachThresholds =>
-        CoachAlertSync ? Telemetry.DrivingThresholds.FromCoachLimits(AlertLimits) : CoachThresholds.Normalised();
+    public Telemetry.DrivingThresholds EffectiveCoachThresholds => Telemetry.DrivingThresholds.Resolve(
+        CoachAlertSource, CoachAlertRelax, Telemetry.DrivingThresholds.Coach, CoachThresholds, AlertLimits);
 
     /// <summary>The thresholds the alerts use in a truck.</summary>
     [JsonIgnore]
-    public Telemetry.DrivingThresholds EffectiveTruckThresholds =>
-        TruckAlertSync == Telemetry.AlertSync.Off
-            ? TruckThresholds.Normalised()
-            : Telemetry.DrivingThresholds.FromCoachLimits(AlertLimits, Telemetry.DrivingThresholds.Factor(TruckAlertSync));
+    public Telemetry.DrivingThresholds EffectiveTruckThresholds => Telemetry.DrivingThresholds.Resolve(
+        TruckAlertSource, TruckAlertRelax, Telemetry.DrivingThresholds.Truck, TruckThresholds, AlertLimits);
 
     /// <summary>Text on the coaches' front destination display.</summary>
     public Features.BusDisplaySettings BusDisplay { get; set; } = new();
@@ -124,16 +131,28 @@ public sealed class AppSettings
                 settings.CoachThresholds = Telemetry.DrivingThresholds.Coach;
                 settings.TruckThresholds = Telemetry.DrivingThresholds.Truck;
             }
-            // v0.8: coach alerts follow the passengers' g-force limits unless switched off afterwards.
-            if (settings.AlertDefaults < 3) settings.CoachAlertSync = true;
-            // v0.8: the defaults are the coach mod's limits; thresholds still on the old defaults move to them.
-            if (settings.AlertDefaults < 4)
+            // v0.8: each vehicle picks a source. Thresholds still on a built-in default follow today's
+            // default; ones the player typed become custom. The previews' sync switches carry over.
+            if (settings.AlertDefaults < 6)
             {
-                if (Telemetry.DrivingThresholds.IsOldDefault(settings.CoachThresholds))
-                    settings.CoachThresholds = Telemetry.DrivingThresholds.FromCoachLimits(settings.AlertLimits);
-                if (Telemetry.DrivingThresholds.IsOldDefault(settings.TruckThresholds))
-                    settings.TruckThresholds = Telemetry.DrivingThresholds.FromCoachLimits(settings.AlertLimits);
+                settings.CoachAlertSource = settings.CoachAlertSync == true ? Telemetry.AlertSource.CoachMod
+                    : Telemetry.DrivingThresholds.IsBuiltIn(settings.CoachThresholds) ? Telemetry.AlertSource.Default
+                    : Telemetry.AlertSource.Custom;
+                var truckSync = settings.TruckAlertSync is "Exact" or "Plus10" or "Plus20";
+                settings.TruckAlertSource = truckSync ? Telemetry.AlertSource.CoachMod
+                    : Telemetry.DrivingThresholds.IsBuiltIn(settings.TruckThresholds) ? Telemetry.AlertSource.Default
+                    : Telemetry.AlertSource.Custom;
+                settings.TruckAlertRelax = settings.TruckAlertSync switch
+                {
+                    "Plus10" => Telemetry.AlertRelax.Plus10,
+                    "Plus20" => Telemetry.AlertRelax.Plus20,
+                    _ => Telemetry.AlertRelax.None,
+                };
+                if (settings.CoachAlertSource == Telemetry.AlertSource.Default) settings.CoachThresholds = Telemetry.DrivingThresholds.Coach;
+                if (settings.TruckAlertSource == Telemetry.AlertSource.Default) settings.TruckThresholds = Telemetry.DrivingThresholds.Truck;
             }
+            settings.CoachAlertSync = null;
+            settings.TruckAlertSync = null;
             settings.AlertDefaults = CurrentAlertDefaults;
             return settings;
         }

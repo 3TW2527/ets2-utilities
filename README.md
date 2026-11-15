@@ -15,7 +15,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
-| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; both default to the coach mod's g-force limits (yellow = normal, red = harsh: 0.61 / 1.12 g in stock); coaches stay synced to them, and trucks can be synced too, as they are or +10% / +20% | Telemetry plugin + on-screen overlay |
+| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction | Telemetry plugin + on-screen overlay |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs`, the installed `dlc_*.scs` and `locale.scs` |
 | **Tools** · Backups | Undo any change the app made (except the livery pack, which is rebuilt from its sources) | Copies taken before every write |
@@ -36,10 +36,13 @@ penalty and reward (only where they start moves). Every direction gets a harsh l
 braking only, so a corner taken far too fast costs no more than a slightly brisk one. The Stock starting
 point keeps the game's numbers and uses its braking harsh limit (1.12 g) in every direction.
 
-The driving alerts use these limits by default in coaches: yellow at the normal limit, red at the harsh one
-(accelerating and braking use the limit along the coach, cornering the one across it). Trucks' own thresholds
-start from the same values; they can also be synced to the coach limits, exactly or 10% / 20% looser. Until the coach mod changes the
-limits, the alerts use the Stock ones. It's part of the Coach comfort mod, because both change the same
+The driving alerts can follow these limits, for coaches, trucks or both (an option on the Driving alerts
+page): yellow at the normal limit, red at the harsh one (accelerating and braking use the limit along the
+coach, cornering the one across it), as they are or 10% / 20% looser. Until the coach mod changes the limits, that uses the Stock ones.
+
+The plugin works out cornering g itself: the SDK's `truck.local.acceleration.linear` is how the velocity seen
+from the truck changes, which stays near zero through a steady corner, so the plugin adds the turning part
+(angular velocity x velocity, i.e. speed x yaw rate), as an accelerometer in the cab would feel it. It's part of the Coach comfort mod, because both change the same
 file; turn off other mods that change `bus_economy_data.sii`, or only one of them wins.
 
 ## Destination display

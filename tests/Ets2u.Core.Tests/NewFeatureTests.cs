@@ -248,6 +248,22 @@ public class LiveryPackTests
     }
 
     [Fact]
+    public void TexturesAreCompressed()
+    {
+        // Livery DDS files are often uncompressed and mostly one colour: stored as-is, a 2 MB mod became 637 MB.
+        using var dir = new TempDir();
+        var root = Path.Combine(dir.Path, "flat");
+        Directory.CreateDirectory(Path.Combine(root, "skins"));
+        File.WriteAllBytes(Path.Combine(root, "skins", "body.dds"), new byte[8 << 20]);
+        var paths = Paths(dir.Path);
+        var plan = LiveryPack.Plan([new LiverySource { Kind = LiverySourceKind.Local, Path = root, Name = "Flat" }], paths);
+        using var ms = new MemoryStream();
+        LiveryPack.Write(ms, LiveryPack.Mod, plan, paths);
+        Assert.InRange(ms.Length, 1, 200_000);
+        Assert.Equal(8 << 20, ScsModBuilder.Read(ms.ToArray(), "skins/body.dds")!.Length);
+    }
+
+    [Fact]
     public void FingerprintChangesWhenASourceChanges()
     {
         using var dir = new TempDir();

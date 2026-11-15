@@ -54,6 +54,8 @@ public partial class MainWindow : Window
         {
             _overlay?.Close();
             _alerts?.Close();
+            _gMeter?.Close();
+            _hub?.Dispose();
             // _mouseIndicator?.Close();
         };
     }
@@ -453,7 +455,7 @@ public partial class MainWindow : Window
         var s = _app.Settings;
         if (s.SpeedOverlay)
         {
-            _overlay ??= new SpeedOverlay(s);
+            _overlay ??= new SpeedOverlay(s, Hub);
             _overlay.Apply(s);
         }
         else
@@ -464,13 +466,24 @@ public partial class MainWindow : Window
 
         if (s.CoachAlerts || s.TruckAlerts)
         {
-            _alerts ??= new DrivingAlertsOverlay(s, new VehicleKind(() => _app.Game));
+            _alerts ??= new DrivingAlertsOverlay(s, Hub);
             _alerts.Apply(s);
         }
         else
         {
             _alerts?.Close();
             _alerts = null;
+        }
+
+        if (s.GForceMeter)
+        {
+            _gMeter ??= new GForceMeter(s, Hub);
+            _gMeter.Apply(s);
+        }
+        else
+        {
+            _gMeter?.Close();
+            _gMeter = null;
         }
 
         // MOUSE DRIVING DISABLED:
@@ -488,6 +501,19 @@ public partial class MainWindow : Window
     // ---------- Driving ----------
 
     DrivingAlertsOverlay? _alerts;
+    GForceMeter? _gMeter;
+    TelemetryHub? _hub;
+
+    /// <summary>One reader of the plugin for every overlay, started when the first one opens.</summary>
+    TelemetryHub Hub => _hub ??= new TelemetryHub(_app.Settings, _app.Paths.InstallDir);
+
+    void GMeter_Click(object sender, RoutedEventArgs e)
+    {
+        _app.Settings.GForceMeter = GMeterBox.IsChecked == true;
+        _app.Settings.Save();
+        UpdateOverlay();
+        _app.Status(_app.Settings.GForceMeter ? "G-force meter on. Drag it where you like." : "G-force meter off.");
+    }
     // MouseDriveIndicator? _mouseIndicator;
 
     // static readonly Dictionary<MouseToggle, string> ToggleNames = new()
@@ -520,10 +546,15 @@ public partial class MainWindow : Window
 
         CoachAlertsBox.IsChecked = s.CoachAlerts;
         TruckAlertsBox.IsChecked = s.TruckAlerts;
-        CoachSyncBox.IsChecked = s.CoachAlertSync;
-        TruckSyncBox.SelectedValue = s.TruckAlertSync;
+        GMeterBox.IsChecked = s.GForceMeter;
+        CoachSourceBox.SelectedValue = s.CoachAlertSource;
+        CoachRelaxBox.SelectedValue = s.CoachAlertRelax;
+        TruckSourceBox.SelectedValue = s.TruckAlertSource;
+        TruckRelaxBox.SelectedValue = s.TruckAlertRelax;
+        _customDraft = (s.CoachThresholds, s.TruckThresholds);
+        _shownSource = (s.CoachAlertSource, s.TruckAlertSource);
         ShowThresholds(s.CoachThresholds, s.TruckThresholds);
-        ShowSyncedThresholds();
+        ShowAlertSources();
         SpeedingBox.IsChecked = s.SpeedingAlerts;
         AlertsStatus.Text = DescribeAlerts(s);
     }
@@ -568,7 +599,7 @@ public partial class MainWindow : Window
     static double ReadG(TextBox box, string name) =>
         double.TryParse(box.Text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v >= 0.05
             ? v
-            : throw new FormatException($"{name}: enter a g-force of at least 0.05, such as 0.61.");
+            : throw new FormatException($"{name}: enter a g-force of at least 0.05, such as 0.35.");
 
     // MOUSE DRIVING DISABLED:
     // void ApplyMouseDrive_Click(object sender, RoutedEventArgs e) => Run(() =>
@@ -591,11 +622,13 @@ public partial class MainWindow : Window
     void ApplyAlerts_Click(object sender, RoutedEventArgs e) => Run(() =>
     {
         var s = _app.Settings;
-        s.CoachAlertSync = CoachSyncBox.IsChecked == true;
-        s.TruckAlertSync = TruckSyncBox.SelectedValue is AlertSync t ? t : AlertSync.Off;
-        // Synced boxes show the derived values; the vehicle's own ones are kept for when sync is turned off.
-        if (!s.CoachAlertSync) s.CoachThresholds = ReadThresholds(coach: true);
-        if (s.TruckAlertSync == AlertSync.Off) s.TruckThresholds = ReadThresholds(coach: false);
+        s.CoachAlertSource = Source(coach: true);
+        s.CoachAlertRelax = Relax(coach: true);
+        s.TruckAlertSource = Source(coach: false);
+        s.TruckAlertRelax = Relax(coach: false);
+        // Only custom numbers are kept from the boxes; the others are worked out from their source.
+        if (s.CoachAlertSource == AlertSource.Custom) s.CoachThresholds = ReadThresholds(coach: true);
+        if (s.TruckAlertSource == AlertSource.Custom) s.TruckThresholds = ReadThresholds(coach: false);
         s.CoachAlerts = CoachAlertsBox.IsChecked == true;
         s.TruckAlerts = TruckAlertsBox.IsChecked == true;
         s.SpeedingAlerts = SpeedingBox.IsChecked == true;
@@ -604,51 +637,83 @@ public partial class MainWindow : Window
         return DescribeAlerts(s);
     });
 
-    /// <summary>The defaults for both: the coach mod's limits (yellow = normal, red = harsh).</summary>
+    /// <summary>Both vehicles back on their defaults, not relaxed.</summary>
     void DefaultThresholds_Click(object sender, RoutedEventArgs e)
     {
-        var limits = DrivingThresholds.FromCoachLimits(_app.Settings.AlertLimits);
-        ShowThresholds(limits, limits);
-        ShowSyncedThresholds();
+        CoachSourceBox.SelectedValue = TruckSourceBox.SelectedValue = AlertSource.Default;
+        CoachRelaxBox.SelectedValue = TruckRelaxBox.SelectedValue = AlertRelax.None;
+        ShowAlertSources();
     }
 
-    static readonly Dictionary<AlertSync, string> TruckSyncNames = new()
+    static Dictionary<AlertSource, string> SourceNames(bool coach) => new()
     {
-        [AlertSync.Off] = "Their own thresholds (below)",
-        [AlertSync.Exact] = "Same as the coach limits",
-        [AlertSync.Plus10] = "Coach limits + 10%",
-        [AlertSync.Plus20] = "Coach limits + 20%",
+        [AlertSource.Default] = coach ? "Defaults (0.35 / 0.7 g)" : "Defaults (0.4 / 0.8 g)",
+        [AlertSource.CoachMod] = "Coach mod's passenger limits",
+        [AlertSource.Custom] = "My own numbers (below)",
     };
 
-    void AlertSync_Changed(object sender, RoutedEventArgs e)
+    static readonly Dictionary<AlertRelax, string> RelaxNames = new()
     {
-        if (!_loading) ShowSyncedThresholds();
+        [AlertRelax.None] = "As they are",
+        [AlertRelax.Plus10] = "10% looser",
+        [AlertRelax.Plus20] = "20% looser",
+    };
+
+    AlertSource Source(bool coach) =>
+        (coach ? CoachSourceBox : TruckSourceBox).SelectedValue is AlertSource s ? s : AlertSource.Default;
+
+    AlertRelax Relax(bool coach) =>
+        (coach ? CoachRelaxBox : TruckRelaxBox).SelectedValue is AlertRelax r ? r : AlertRelax.None;
+
+    /// <summary>The saved custom numbers, used when the boxes can't be read.</summary>
+    (DrivingThresholds Coach, DrivingThresholds Truck) _customDraft = (DrivingThresholds.Coach, DrivingThresholds.Truck);
+    (AlertSource Coach, AlertSource Truck) _shownSource;
+
+    void AlertSource_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_loading && IsLoaded) ShowAlertSources();
     }
 
-    /// <summary>Synced columns show the values the alerts will use, and can't be typed in.</summary>
-    void ShowSyncedThresholds()
+    /// <summary>
+    /// Custom columns can be typed in; the others show, greyed out, the numbers their source gives. Switching
+    /// to custom starts from the numbers that were showing, so a source can be fine-tuned.
+    /// </summary>
+    void ShowAlertSources()
     {
         static string F(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
-        var limits = _app.Settings.AlertLimits;
-        var truckSync = TruckSyncBox.SelectedValue is AlertSync t ? t : AlertSync.Off;
-        foreach (var (isCoach, synced, factor) in new[]
-                 {
-                     (true, CoachSyncBox.IsChecked == true, 1.0),
-                     (false, truckSync != AlertSync.Off, DrivingThresholds.Factor(truckSync)),
-                 })
+        var s = _app.Settings;
+        foreach (var coach in new[] { true, false })
         {
-            var boxes = ThresholdBoxes(isCoach);
-            foreach (var (yellow, red, _) in boxes) yellow.IsEnabled = red.IsEnabled = !synced;
-            if (!synced) continue;
-            var d = DrivingThresholds.FromCoachLimits(limits, factor);
-            (boxes[0].Yellow.Text, boxes[0].Red.Text) = (F(d.AccelYellow), F(d.AccelRed));
-            (boxes[1].Yellow.Text, boxes[1].Red.Text) = (F(d.BrakeYellow), F(d.BrakeRed));
-            (boxes[2].Yellow.Text, boxes[2].Red.Text) = (F(d.CornerYellow), F(d.CornerRed));
+            var source = Source(coach);
+            var was = coach ? _shownSource.Coach : _shownSource.Truck;
+            var boxes = ThresholdBoxes(coach);
+            DrivingThresholds shown;
+            if (source != AlertSource.Custom) shown = Resolved(coach, source);
+            // Staying custom (or opening the page on it): what's in the boxes. Just switched to custom:
+            // start from the numbers that were showing.
+            else if (was == AlertSource.Custom) shown = ReadOrNull(coach) ?? (coach ? _customDraft.Coach : _customDraft.Truck);
+            else shown = Resolved(coach, was);
+            foreach (var (yellow, red, _) in boxes) yellow.IsEnabled = red.IsEnabled = source == AlertSource.Custom;
+            (boxes[0].Yellow.Text, boxes[0].Red.Text) = (F(shown.AccelYellow), F(shown.AccelRed));
+            (boxes[1].Yellow.Text, boxes[1].Red.Text) = (F(shown.BrakeYellow), F(shown.BrakeRed));
+            (boxes[2].Yellow.Text, boxes[2].Red.Text) = (F(shown.CornerYellow), F(shown.CornerRed));
+            (coach ? CoachRelaxBox : TruckRelaxBox).IsEnabled = source != AlertSource.Custom;
+            _shownSource = coach ? (source, _shownSource.Truck) : (_shownSource.Coach, source);
         }
-        var source = _app.Settings.CoachLimits is null ? "the stock limits (the coach mod doesn't change them yet)" : "your limits on the Coach passengers page";
-        CoachThresholdNote.Text = CoachSyncBox.IsChecked == true || truckSync != AlertSync.Off
-            ? $"Greyed-out columns come from {source}; change them there."
-            : "";
+        var fromMod = Source(true) == AlertSource.CoachMod || Source(false) == AlertSource.CoachMod;
+        CoachThresholdNote.Text = !fromMod ? ""
+            : s.CoachLimits is null ? "The coach mod doesn't change the passengers' limits yet, so its Stock ones are used (Coach passengers page)."
+            : "Coach mod numbers come from the Coach passengers page; change them there.";
+
+        DrivingThresholds Resolved(bool coach, AlertSource source) => DrivingThresholds.Resolve(
+            source, Relax(coach), coach ? DrivingThresholds.Coach : DrivingThresholds.Truck,
+            coach ? _customDraft.Coach : _customDraft.Truck, s.AlertLimits);
+    }
+
+    DrivingThresholds? ReadOrNull(bool coach)
+    {
+        try { return ReadThresholds(coach); }
+        catch (FormatException) { return null; }
     }
 
     // ---------- Game Information ----------

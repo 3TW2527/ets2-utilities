@@ -120,36 +120,40 @@ public class DrivingEventTests
 public class CoachAndTruckTests
 {
     [Fact]
-    public void DefaultsAreTheCoachModsLimits()
+    public void Defaults()
     {
-        foreach (var d in new[] { DrivingThresholds.Coach, DrivingThresholds.Truck, new DrivingThresholds() })
+        foreach (var (d, yellow, red) in new[] { (DrivingThresholds.Coach, 0.35, 0.70), (DrivingThresholds.Truck, 0.40, 0.80) })
         {
-            Assert.Equal((0.61, 1.12), (d.AccelYellow, d.AccelRed));
-            Assert.Equal((0.61, 1.12), (d.BrakeYellow, d.BrakeRed));
-            Assert.Equal((0.61, 1.12), (d.CornerYellow, d.CornerRed));
+            Assert.Equal((yellow, red), (d.AccelYellow, d.AccelRed));
+            Assert.Equal((yellow, red), (d.BrakeYellow, d.BrakeRed));
+            Assert.Equal((yellow, red), (d.CornerYellow, d.CornerRed));
         }
     }
 
     [Fact]
-    public void YellowAtTheNormalLimitRedAtTheHarshOne()
+    public void CoachDefaultsAlertSoonerThanTruckOnes()
     {
         var t0 = new DateTime(2026, 1, 1);
-        Assert.Equal(AlertLevel.Yellow, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, 0, 0.62f, 15, 0)).Level);
-        Assert.Equal(AlertLevel.Red, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, 0, 1.13f, 15, 0)).Level);
+        Assert.Equal(AlertLevel.Yellow, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, 0, 0.38f, 15, 0)).Level);
+        Assert.Empty(new DrivingEventDetector { Thresholds = DrivingThresholds.Truck }.Update(t0, 0, 0.38f, 15, 0));
+        Assert.Equal(AlertLevel.Red, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, 0, 0.75f, 15, 0)).Level);
+        Assert.Equal(AlertLevel.Yellow, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Truck }.Update(t0, 0, 0.75f, 15, 0)).Level);
+        Assert.Equal(AlertLevel.Yellow, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, -0.4f, 0, 15, 0)).Level);
+        Assert.Equal(AlertLevel.Red, Assert.Single(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, -0.75f, 0, 15, 0)).Level);
         Assert.Empty(new DrivingEventDetector { Thresholds = DrivingThresholds.Coach }.Update(t0, -0.3f, 0, 15, 0)); // an ordinary stop
     }
 
     [Fact]
-    public void OldBuiltInDefaultsMoveToTheCoachModsLimitsButOwnValuesStay()
+    public void OldBuiltInDefaultsMoveToTheNewOnesButOwnValuesStay()
     {
         var path = Path.Combine(Path.GetTempPath(), $"ets2u_settings_{Guid.NewGuid():N}.json");
         try
         {
-            File.WriteAllText(path, "{\"AlertDefaults\": 3, " +
+            File.WriteAllText(path, "{\"AlertDefaults\": 4, " +
                 "\"CoachThresholds\": {\"AccelYellow\": 0.4, \"AccelRed\": 0.6, \"BrakeYellow\": 0.4, \"BrakeRed\": 0.6, \"CornerYellow\": 0.4, \"CornerRed\": 0.6}, " +
                 "\"TruckThresholds\": {\"AccelYellow\": 0.5, \"AccelRed\": 0.7, \"BrakeYellow\": 0.45, \"BrakeRed\": 0.65, \"CornerYellow\": 0.45, \"CornerRed\": 0.65}}");
             var s = AppSettings.Load(path);
-            Assert.Equal(1.12, s.CoachThresholds.CornerRed);
+            Assert.Equal(0.70, s.CoachThresholds.BrakeRed);
             Assert.Equal(0.5, s.TruckThresholds.AccelYellow); // the player changed this one: kept
         }
         finally
@@ -180,7 +184,7 @@ public class CoachAndTruckTests
         {
             File.WriteAllText(path, "{\"CoachThresholds\": {\"AccelYellow\": 0.15}}");
             var s = AppSettings.Load(path);
-            Assert.Equal(0.61, s.CoachThresholds.AccelYellow);
+            Assert.Equal(0.35, s.CoachThresholds.AccelYellow);
             s.CoachThresholds.AccelYellow = 0.5;   // the player's own choice afterwards stays
             s.Save(path);
             Assert.Equal(0.5, AppSettings.Load(path).CoachThresholds.AccelYellow);
@@ -202,7 +206,7 @@ public class CoachAndTruckTests
             Assert.True(s.CoachAlerts);
             Assert.True(s.TruckAlerts);
             Assert.Null(s.DrivingAlerts);
-            Assert.Equal(0.61, s.CoachThresholds.AccelYellow);
+            Assert.Equal(0.35, s.CoachThresholds.AccelYellow);
         }
         finally
         {

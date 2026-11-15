@@ -16,9 +16,16 @@ public partial class MainWindow
     void InitPages()
     {
         GPresetBox.ItemsSource = CoachGLimits.Presets.Select(p => p.Name).Append("Custom").ToList();
-        TruckSyncBox.ItemsSource = TruckSyncNames;
-        TruckSyncBox.DisplayMemberPath = "Value";
-        TruckSyncBox.SelectedValuePath = "Key";
+        foreach (var (box, names) in new[]
+                 {
+                     (CoachSourceBox, (System.Collections.IEnumerable)SourceNames(coach: true)), (TruckSourceBox, SourceNames(coach: false)),
+                     (CoachRelaxBox, RelaxNames), (TruckRelaxBox, RelaxNames),
+                 })
+        {
+            box.ItemsSource = names;
+            box.DisplayMemberPath = "Value";
+            box.SelectedValuePath = "Key";
+        }
         BusColorBox.ItemsSource = Enum.GetValues<DisplayColor>();
     }
 

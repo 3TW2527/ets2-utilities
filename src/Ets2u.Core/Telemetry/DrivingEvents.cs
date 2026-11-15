@@ -6,34 +6,76 @@ public enum DrivingEventKind { Acceleration, Braking, Cornering, Speeding }
 
 public enum AlertLevel { Yellow, Red }
 
-/// <summary>Where a vehicle's alert thresholds come from: their own boxes, or the coach passengers' limits.</summary>
-public enum AlertSync { Off, Exact, Plus10, Plus20 }
+/// <summary>Where a vehicle's alert thresholds come from.</summary>
+public enum AlertSource
+{
+    /// <summary>The built-in thresholds for that vehicle.</summary>
+    Default,
+    /// <summary>The coach passengers' g-force limits: yellow = normal limit, red = harsh limit.</summary>
+    CoachMod,
+    /// <summary>The player's own numbers.</summary>
+    Custom,
+}
+
+/// <summary>How much looser than its source a vehicle's thresholds are (not used for custom ones).</summary>
+public enum AlertRelax { None, Plus10, Plus20 }
 
 /// <summary>
 /// Where the g-force meter turns yellow and red, in g (the plugin's reading, smoothed over ~0.3 s).
-/// The defaults are the coach passengers' stock limits (see <see cref="FromCoachLimits"/>): yellow where
-/// the game's small satisfaction penalty starts (0.61 g), red where its big one does (1.12 g).
+/// Defaults, set from driving with the live meter: coaches 0.35 / 0.7 g in every direction, trucks 0.4 / 0.8 g.
 /// </summary>
 public sealed class DrivingThresholds
 {
-    public double AccelYellow { get; set; } = 0.61;
-    public double AccelRed { get; set; } = 1.12;
-    public double BrakeYellow { get; set; } = 0.61;
-    public double BrakeRed { get; set; } = 1.12;
-    public double CornerYellow { get; set; } = 0.61;
-    public double CornerRed { get; set; } = 1.12;
+    public double AccelYellow { get; set; } = 0.35;
+    public double AccelRed { get; set; } = 0.70;
+    public double BrakeYellow { get; set; } = 0.35;
+    public double BrakeRed { get; set; } = 0.70;
+    public double CornerYellow { get; set; } = 0.35;
+    public double CornerRed { get; set; } = 0.70;
 
-    /// <summary>The default for any vehicle: the coach mod's stock limits.</summary>
-    public static DrivingThresholds Default => FromCoachLimits(Features.CoachGLimits.Stock);
+    /// <summary>Buses and coaches.</summary>
+    public static DrivingThresholds Coach => Uniform(0.35, 0.70);
 
-    public static DrivingThresholds Truck => Default;
+    /// <summary>Trucks: a little more, there are no passengers.</summary>
+    public static DrivingThresholds Truck => Uniform(0.40, 0.80);
 
-    public static DrivingThresholds Coach => Default;
+    static DrivingThresholds Uniform(double yellow, double red) => new()
+    {
+        AccelYellow = yellow, AccelRed = red, BrakeYellow = yellow, BrakeRed = red, CornerYellow = yellow, CornerRed = red,
+    };
 
-    /// <summary>The built-in defaults before v0.8, replaced once when they're still in use.</summary>
-    public static bool IsOldDefault(DrivingThresholds t) =>
-        new[] { (0.40, 0.60), (0.45, 0.65) }.Any(d =>
-            new[] { (t.AccelYellow, t.AccelRed), (t.BrakeYellow, t.BrakeRed), (t.CornerYellow, t.CornerRed) }.All(x => x == d));
+    /// <summary>
+    /// A built-in default, past or present: 0.40 / 0.60 and 0.45 / 0.65 (v0.7), 0.61 / 1.12 and
+    /// 0.35 / 0.7 with 0.61 / 1.12 cornering (v0.8 previews), and today's. Thresholds equal to one of these
+    /// were never chosen by the player.
+    /// </summary>
+    public static bool IsBuiltIn(DrivingThresholds t)
+    {
+        var rows = new[] { (t.AccelYellow, t.AccelRed), (t.BrakeYellow, t.BrakeRed), (t.CornerYellow, t.CornerRed) };
+        var uniform = new[] { (0.40, 0.60), (0.45, 0.65), (0.61, 1.12), (0.35, 0.70), (0.40, 0.80) }.Any(d => rows.All(r => r == d));
+        return uniform || (rows[0] == (0.35, 0.70) && rows[1] == (0.35, 0.70) && rows[2] == (0.61, 1.12));
+    }
+
+    /// <summary>Every threshold times <paramref name="factor"/>.</summary>
+    public DrivingThresholds Scaled(double factor)
+    {
+        static double R(double g) => Math.Round(g + 1e-9, 2, MidpointRounding.AwayFromZero); // 0.385 is 0.39, not 0.38
+        return new DrivingThresholds
+        {
+            AccelYellow = R(AccelYellow * factor), AccelRed = R(AccelRed * factor),
+            BrakeYellow = R(BrakeYellow * factor), BrakeRed = R(BrakeRed * factor),
+            CornerYellow = R(CornerYellow * factor), CornerRed = R(CornerRed * factor),
+        }.Normalised();
+    }
+
+    /// <summary>What a vehicle's alerts use.</summary>
+    public static DrivingThresholds Resolve(AlertSource source, AlertRelax relax, DrivingThresholds builtIn,
+                                            DrivingThresholds custom, Features.CoachGLimits coachLimits) => source switch
+    {
+        AlertSource.CoachMod => FromCoachLimits(coachLimits, Factor(relax)),
+        AlertSource.Custom => custom.Normalised(),
+        _ => builtIn.Scaled(Factor(relax)),
+    };
 
     /// <summary>
     /// From the coach passengers' g-force limits: yellow where the small penalty starts, red where the big
@@ -42,7 +84,7 @@ public sealed class DrivingThresholds
     /// </summary>
     public static DrivingThresholds FromCoachLimits(Features.CoachGLimits l, double factor = 1)
     {
-        static double R(double g) => Math.Round(g, 2);
+        static double R(double g) => Math.Round(g + 1e-9, 2, MidpointRounding.AwayFromZero); // 0.385 is 0.39, not 0.38
         var brakeRed = Features.CoachGLimits.HarshOrDefault(l.Braking, l.HarshBraking);
         var cornerRed = Features.CoachGLimits.HarshOrDefault(l.Cornering, l.HarshCornering);
         return new DrivingThresholds
@@ -53,10 +95,10 @@ public sealed class DrivingThresholds
         }.Normalised();
     }
 
-    public static double Factor(AlertSync sync) => sync switch
+    public static double Factor(AlertRelax relax) => relax switch
     {
-        AlertSync.Plus10 => 1.1,
-        AlertSync.Plus20 => 1.2,
+        AlertRelax.Plus10 => 1.1,
+        AlertRelax.Plus20 => 1.2,
         _ => 1,
     };
 
