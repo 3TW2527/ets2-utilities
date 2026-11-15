@@ -258,6 +258,108 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- Driving -->
+            <TabItem Header="Driving">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12" MaxWidth="760" HorizontalAlignment="Left">
+                        <TextBlock Style="{StaticResource Note}" Margin="0,0,0,0"
+                                   Text="This uses the plugin from the HUD &amp; Dash tab (install it again there after updating this app)."/>
+                        <TextBlock x:Name="DrivingPluginStatus" Style="{StaticResource Note}"/>
+
+                        <!-- MOUSE DRIVING DISABLED (see MainWindow.xaml.cs, plugin ETS2U_MOUSE_DRIVING). Re-enable by removing this comment.
+                        <TextBlock Style="{StaticResource H}" Text="Mouse driving, OMSI style"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Switch it on in the game with the key below. Then where the mouse is across the screen is where the wheel is: the screen's width is full left to full right lock at walking pace, and the faster you go, the further the same movement has to go, so the wheel gets heavier with speed. Above the middle of the screen is the throttle, below it the brake. Hold the right mouse button to look round: the wheel and the pedals stay where they are. Applying it changes your profiles&apos; camera so it holds still while the mouse steers and looks round as usual when mouse driving is off; turning it off puts it back. ETS2 must be closed to apply. The plugin does the driving, so this app can be closed."/>
+                        <CheckBox x:Name="MouseDriveBox" Content="Let the mouse drive (switched on and off in the game)" Margin="0,6,0,0"/>
+                        <Grid Margin="20,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="220"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Switch on and off with" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="MouseToggleBox" Grid.Column="1" Margin="0,3"/>
+                            <TextBlock Grid.Row="1" Text="Steering sensitivity" VerticalAlignment="Center"/>
+                            <Slider x:Name="MouseSensSlider" Grid.Row="1" Grid.Column="1" Minimum="0.5" Maximum="3" Margin="0,4"
+                                    TickFrequency="0.1" IsSnapToTickEnabled="True"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding Value, ElementName=MouseSensSlider, StringFormat=x{0:0.0}}"/>
+                            <TextBlock Grid.Row="2" Text="Pedal strength" VerticalAlignment="Center"/>
+                            <Slider x:Name="MousePedalSlider" Grid.Row="2" Grid.Column="1" Minimum="0.5" Maximum="3" Margin="0,4"
+                                    TickFrequency="0.1" IsSnapToTickEnabled="True"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding Value, ElementName=MousePedalSlider, StringFormat=x{0:0.0}}"/>
+                            <CheckBox x:Name="MouseIndicatorBox" Grid.Row="3" Grid.ColumnSpan="3" Margin="0,4"
+                                      Content="Show where the wheel and the pedals are (bottom of the screen, needs this app open)"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="Apply mouse driving" Click="ApplyMouseDrive_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="MouseDriveStatus" Style="{StaticResource Note}" Margin="0,6,0,0"/>
+                        END OF MOUSE DRIVING -->
+
+                        <TextBlock Style="{StaticResource H}" Text="Driving alerts, GreenRoad style"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds; the app tells which you&apos;re driving. For coaches, red is where passengers start to complain. Speeding always shows in red. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <CheckBox x:Name="CoachAlertsBox" Content="In coaches" Margin="0,0,24,0"/>
+                            <CheckBox x:Name="TruckAlertsBox" Content="In trucks"/>
+                        </StackPanel>
+                        <Grid Margin="20,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="70"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Column="1" Grid.ColumnSpan="2" Text="Coaches" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="4" Grid.ColumnSpan="2" Text="Trucks" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Yellow (g)" Foreground="#8A6A00"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Red (g)" Foreground="#B3261E"/>
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="Yellow (g)" Foreground="#8A6A00"/>
+                            <TextBlock Grid.Row="1" Grid.Column="5" Text="Red (g)" Foreground="#B3261E"/>
+                            <TextBlock Grid.Row="2" Text="Acceleration" VerticalAlignment="Center"/>
+                            <TextBox x:Name="CoachAccelYellowBox" Grid.Row="2" Grid.Column="1" Margin="0,3,8,3"/>
+                            <TextBox x:Name="CoachAccelRedBox" Grid.Row="2" Grid.Column="2" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckAccelYellowBox" Grid.Row="2" Grid.Column="4" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckAccelRedBox" Grid.Row="2" Grid.Column="5" Margin="0,3,8,3"/>
+                            <TextBlock Grid.Row="3" Text="Braking" VerticalAlignment="Center"/>
+                            <TextBox x:Name="CoachBrakeYellowBox" Grid.Row="3" Grid.Column="1" Margin="0,3,8,3"/>
+                            <TextBox x:Name="CoachBrakeRedBox" Grid.Row="3" Grid.Column="2" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckBrakeYellowBox" Grid.Row="3" Grid.Column="4" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckBrakeRedBox" Grid.Row="3" Grid.Column="5" Margin="0,3,8,3"/>
+                            <TextBlock Grid.Row="4" Text="Cornering" VerticalAlignment="Center"/>
+                            <TextBox x:Name="CoachCornerYellowBox" Grid.Row="4" Grid.Column="1" Margin="0,3,8,3"/>
+                            <TextBox x:Name="CoachCornerRedBox" Grid.Row="4" Grid.Column="2" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckCornerYellowBox" Grid.Row="4" Grid.Column="4" Margin="0,3,8,3"/>
+                            <TextBox x:Name="TruckCornerRedBox" Grid.Row="4" Grid.Column="5" Margin="0,3,8,3"/>
+                        </Grid>
+                        <CheckBox x:Name="SpeedingBox" Margin="20,6,0,0"
+                                  Content="Speeding alerts (needs a speed limit from the route advisor)"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button Content="Apply alerts" Click="ApplyAlerts_Click"/>
+                            <Button Content="Default thresholds" Click="DefaultThresholds_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="AlertsStatus" Style="{StaticResource Note}" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- Game Information -->
             <TabItem Header="Game Information">
                 <Grid Margin="12">

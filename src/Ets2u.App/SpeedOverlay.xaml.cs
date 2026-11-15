@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Threading;
 using Ets2u.Core;
 using Ets2u.Core.Telemetry;
@@ -14,26 +12,18 @@ namespace Ets2u.App;
 /// </summary>
 public partial class SpeedOverlay : Window
 {
-    const int GwlExStyle = -20;
-    const int WsExTransparent = 0x20, WsExToolWindow = 0x80, WsExLayered = 0x80000, WsExNoActivate = 0x8000000;
-
-    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
-    [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hwnd, int index, int value);
-
-    readonly TelemetryReader _reader = new();
+    readonly LiveTelemetry _telemetry = new();
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     AppSettings _settings;
-    uint _lastSequence;
-    DateTime _lastChange = DateTime.MinValue;
 
     public SpeedOverlay(AppSettings settings)
     {
         InitializeComponent();
         _settings = settings;
-        SourceInitialized += (_, _) => MakeClickThrough();
+        SourceInitialized += (_, _) => OverlayWindow.MakeClickThrough(this);
         SizeChanged += (_, _) => Place();
         _timer.Tick += (_, _) => Tick();
-        Closed += (_, _) => { _timer.Stop(); _reader.Dispose(); };
+        Closed += (_, _) => { _timer.Stop(); _telemetry.Dispose(); };
         Apply(settings);
         _timer.Start();
     }
@@ -43,12 +33,6 @@ public partial class SpeedOverlay : Window
         _settings = settings;
         Scale.ScaleX = Scale.ScaleY = Math.Clamp(settings.OverlayScale, 0.6, 3);
         Place();
-    }
-
-    void MakeClickThrough()
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        SetWindowLong(hwnd, GwlExStyle, GetWindowLong(hwnd, GwlExStyle) | WsExTransparent | WsExToolWindow | WsExLayered | WsExNoActivate);
     }
 
     void Place()
@@ -71,24 +55,8 @@ public partial class SpeedOverlay : Window
 
     void Tick()
     {
-        var frame = _reader.Read();
-        if (frame is not { } f)
+        if (_telemetry.Read() is not { } f)
         {
-            _reader.Reset();
-            Hide();
-            return;
-        }
-
-        // The plugin bumps Sequence every simulated frame; if it stops, the game has closed or is loading.
-        if (f.Sequence != _lastSequence)
-        {
-            _lastSequence = f.Sequence;
-            _lastChange = DateTime.UtcNow;
-        }
-        var live = DateTime.UtcNow - _lastChange < TimeSpan.FromSeconds(2) && f.Paused == 0;
-        if (!live)
-        {
-            if (DateTime.UtcNow - _lastChange > TimeSpan.FromSeconds(10)) _reader.Reset();
             Hide();
             return;
         }

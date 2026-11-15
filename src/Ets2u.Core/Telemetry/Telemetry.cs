@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 1;
+    public const uint ExpectedVersion = 3;
 
     public uint Magic;
     public uint Version;
@@ -18,8 +18,37 @@ public struct TelemetryFrame
     public uint Paused;
     public float SpeedMs;
     public float SpeedLimitMs;
+    /// <summary>Forward acceleration in g, smoothed by the plugin over ~0.3 s (negative when slowing).</summary>
+    public float AccelForwardG;
+    /// <summary>Acceleration towards the truck's right in g, smoothed the same.</summary>
+    public float AccelRightG;
+    public MouseDriveState MouseState;
+    /// <summary>-1 full left .. 1 full right.</summary>
+    public float MouseSteer;
+    public float MouseThrottle;
+    public float MouseBrake;
+    /// <summary>The truck config's id, e.g. "vehicle.man.lions_24"; empty before a truck is loaded.</summary>
+    public TruckIdBytes TruckIdRaw;
+
+    public readonly string TruckId
+    {
+        get
+        {
+            ReadOnlySpan<byte> bytes = TruckIdRaw;
+            var end = bytes.IndexOf((byte)0);
+            return System.Text.Encoding.ASCII.GetString(end < 0 ? bytes : bytes[..end]);
+        }
+    }
 
     public readonly bool Valid => Magic == ExpectedMagic && Version == ExpectedVersion;
+}
+
+public enum MouseDriveState : uint { Off, Steering, Held, NoFeed }
+
+[System.Runtime.CompilerServices.InlineArray(64)]
+public struct TruckIdBytes
+{
+    byte _first;
 }
 
 /// <summary>Reads the plugin's shared memory. Returns null when the game (or the plugin) isn't running.</summary>
@@ -42,8 +71,10 @@ public sealed class TelemetryReader : IDisposable
             _view.Read(0, out TelemetryFrame frame);
             return frame.Valid ? frame : null;
         }
-        catch (FileNotFoundException)
+        catch (Exception ex) when (ex is FileNotFoundException or UnauthorizedAccessException or ArgumentOutOfRangeException or IOException)
         {
+            // (an older plugin's smaller memory can't hold this layout)
+            Reset();
             return null;
         }
     }
@@ -58,6 +89,38 @@ public sealed class TelemetryReader : IDisposable
     }
 
     public void Dispose() => Reset();
+}
+
+/// <summary>
+/// The plugin's frame while the game is running and not paused. The plugin bumps Sequence every
+/// simulated frame; when it stops the game has closed or is loading.
+/// </summary>
+public sealed class LiveTelemetry : IDisposable
+{
+    readonly TelemetryReader _reader = new();
+    uint _lastSequence;
+    DateTime _lastChange = DateTime.MinValue;
+
+    /// <summary>The frame, or null when the game isn't running, is paused, or the plugin is missing or older.</summary>
+    public TelemetryFrame? Read()
+    {
+        var frame = _reader.Read();
+        if (frame is not { } f)
+        {
+            _reader.Reset();
+            return null;
+        }
+        if (f.Sequence != _lastSequence)
+        {
+            _lastSequence = f.Sequence;
+            _lastChange = DateTime.UtcNow;
+        }
+        if (DateTime.UtcNow - _lastChange < TimeSpan.FromSeconds(2) && f.Paused == 0) return f;
+        if (DateTime.UtcNow - _lastChange > TimeSpan.FromSeconds(10)) _reader.Reset();
+        return null;
+    }
+
+    public void Dispose() => _reader.Dispose();
 }
 
 public static class SpeedText

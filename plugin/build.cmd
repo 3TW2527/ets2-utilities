@@ -11,5 +11,5 @@ call "%VS%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 set ROOT=%~dp0..
 if not exist "%~dp0bin" mkdir "%~dp0bin"
 cl /nologo /O2 /EHsc /MT /LD /W4 /I"%ROOT%\tools\scs_sdk\include" "%~dp0ets2u_telemetry.cpp" ^
-   /Fo"%~dp0bin\\" /Fe"%~dp0bin\ets2u_telemetry.dll" /link /DEF:"%~dp0ets2u_telemetry.def" || exit /b 1
+   /Fo"%~dp0bin\\" /Fe"%~dp0bin\ets2u_telemetry.dll" /link /DEF:"%~dp0ets2u_telemetry.def" user32.lib dinput8.lib dxguid.lib || exit /b 1
 echo Built %~dp0bin\ets2u_telemetry.dll

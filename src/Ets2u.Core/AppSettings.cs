@@ -14,6 +14,9 @@ public enum MapSide
 
 public enum OverlayCorner { TopLeft, TopCenter, TopRight, BottomLeft, BottomRight }
 
+/// <summary>What switches mouse driving on and off in the game.</summary>
+public enum MouseToggle { F8, Insert, MiddleButton }
+
 /// <summary>The user's choices, saved to %APPDATA%\ets2u\settings.json.</summary>
 public sealed class AppSettings
 {
@@ -26,6 +29,29 @@ public sealed class AppSettings
     public OverlayCorner OverlayCorner { get; set; } = OverlayCorner.TopRight;
     public double OverlayScale { get; set; } = 1;
     public bool OverlayShowLimit { get; set; } = true;
+    /// <summary>OMSI-style mouse driving, done by the plugin (it reads mouse_drive.ini).</summary>
+    public bool MouseDrive { get; set; }
+    public MouseToggle MouseToggle { get; set; } = MouseToggle.F8;
+    /// <summary>1 = the window's width is full lock at walking pace (OMSI); 2 = half the width.</summary>
+    public double MouseSensitivity { get; set; } = 1;
+    public double MousePedalStrength { get; set; } = 1;
+    public bool MouseIndicator { get; set; } = true;
+    /// <summary>Each profile's own controls before mouse driving changed them, by profile folder.</summary>
+    public Dictionary<string, Telemetry.ControlsOriginal> MouseControlsOriginals { get; set; } = new();
+
+    /// <summary>GreenRoad-style alerts for harsh driving and speeding, in coaches and in trucks.</summary>
+    public bool CoachAlerts { get; set; }
+    public bool TruckAlerts { get; set; }
+    public Telemetry.DrivingThresholds CoachThresholds { get; set; } = Telemetry.DrivingThresholds.Coach;
+    public Telemetry.DrivingThresholds TruckThresholds { get; set; } = Telemetry.DrivingThresholds.Truck;
+    public bool SpeedingAlerts { get; set; } = true;
+    /// <summary>Which defaults the saved thresholds came from; older ones are replaced on load.</summary>
+    public int AlertDefaults { get; set; }
+    public const int CurrentAlertDefaults = 2;
+
+    /// <summary>v0.7 previews' single switch; read once and turned into <see cref="CoachAlerts"/> and <see cref="TruckAlerts"/>.</summary>
+    public bool? DrivingAlerts { get; set; }
+
     /// <summary>Factors that no longer lower coach passenger satisfaction.</summary>
     public Features.CoachFactor CoachIgnored { get; set; }
     public bool CoachFullSatisfaction { get; set; }
@@ -59,6 +85,15 @@ public sealed class AppSettings
             var settings = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new() : new();
             if (settings.CoachNoPenalties == true) settings.CoachIgnored = Features.CoachFactor.All;
             settings.CoachNoPenalties = null;
+            if (settings.DrivingAlerts == true) settings.CoachAlerts = settings.TruckAlerts = true;
+            settings.DrivingAlerts = null;
+            if (settings.AlertDefaults < CurrentAlertDefaults)
+            {
+                // The first thresholds alerted on nearly every start and stop.
+                settings.CoachThresholds = Telemetry.DrivingThresholds.Coach;
+                settings.TruckThresholds = Telemetry.DrivingThresholds.Truck;
+                settings.AlertDefaults = CurrentAlertDefaults;
+            }
             return settings;
         }
         catch (JsonException)

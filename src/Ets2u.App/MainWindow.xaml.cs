@@ -37,10 +37,20 @@ public partial class MainWindow : Window
         {
             RefreshAll();
             UpdateOverlay();
+            // MOUSE DRIVING DISABLED:
+            // try { MouseDriveConfig.Write(_app.Settings); }
+            // catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppDirs.Log("mouse_drive.ini: " + ex.Message); }
             Run(() => _app.RebuildIfGameUpdated() ?? "Ready");
+            // The game can reset controls.sii when its control options change: set them up again.
+            // if (_app.MouseControlsNeeded && !_app.GameRunning) Run(() => _app.SetMouseControls(true) + "Mouse driving controls set up again.");
         };
         Activated += (_, _) => UpdateBanner();
-        Closed += (_, _) => _overlay?.Close();
+        Closed += (_, _) =>
+        {
+            _overlay?.Close();
+            _alerts?.Close();
+            // _mouseIndicator?.Close();
+        };
     }
 
     // ---------- shared ----------
@@ -52,6 +62,7 @@ public partial class MainWindow : Window
         RefreshGameplay();
         RefreshProfiles();
         RefreshHud();
+        RefreshDriving();
         RefreshInfo();
         RefreshBackups();
         UpdateBanner();
@@ -412,17 +423,157 @@ public partial class MainWindow : Window
 
     void UpdateOverlay()
     {
-        if (_app.Settings.SpeedOverlay)
+        var s = _app.Settings;
+        if (s.SpeedOverlay)
         {
-            _overlay ??= new SpeedOverlay(_app.Settings);
-            _overlay.Apply(_app.Settings);
+            _overlay ??= new SpeedOverlay(s);
+            _overlay.Apply(s);
         }
         else
         {
             _overlay?.Close();
             _overlay = null;
         }
+
+        if (s.CoachAlerts || s.TruckAlerts)
+        {
+            _alerts ??= new DrivingAlertsOverlay(s, new VehicleKind(() => _app.Game));
+            _alerts.Apply(s);
+        }
+        else
+        {
+            _alerts?.Close();
+            _alerts = null;
+        }
+
+        // MOUSE DRIVING DISABLED:
+        // if (s.MouseDrive && s.MouseIndicator)
+        // {
+        //     _mouseIndicator ??= new MouseDriveIndicator();
+        // }
+        // else
+        // {
+        //     _mouseIndicator?.Close();
+        //     _mouseIndicator = null;
+        // }
     }
+
+    // ---------- Driving ----------
+
+    DrivingAlertsOverlay? _alerts;
+    // MouseDriveIndicator? _mouseIndicator;
+
+    // static readonly Dictionary<MouseToggle, string> ToggleNames = new()
+    // {
+    //     [MouseToggle.F8] = "F8",
+    //     [MouseToggle.Insert] = "Insert",
+    //     [MouseToggle.MiddleButton] = "Middle mouse button",
+    // };
+
+    void RefreshDriving()
+    {
+        var s = _app.Settings;
+        var install = _app.Paths.InstallDir;
+        DrivingPluginStatus.Text = !PluginInstaller.IsInstalled(install) ? "The plugin isn't installed yet: install it on the HUD & Dash tab."
+            : PluginInstaller.IsCurrent(install) ? "Plugin installed."
+            : "An older plugin is installed: install it again on the HUD & Dash tab, or these won't work.";
+
+        // MOUSE DRIVING DISABLED:
+        // MouseDriveBox.IsChecked = s.MouseDrive;
+        // MouseToggleBox.ItemsSource = ToggleNames;
+        // MouseToggleBox.DisplayMemberPath = "Value";
+        // MouseToggleBox.SelectedValuePath = "Key";
+        // MouseToggleBox.SelectedValue = s.MouseToggle;
+        // MouseSensSlider.Value = s.MouseSensitivity;
+        // MousePedalSlider.Value = s.MousePedalStrength;
+        // MouseIndicatorBox.IsChecked = s.MouseIndicator;
+        // var (ready, total) = _app.MouseControlsState();
+        // MouseDriveStatus.Text = !s.MouseDrive ? "Mouse driving off."
+        //     : total == 0 ? "No profile's controls.sii was found, so the camera will still follow the mouse. Start ETS2 once with your profile, close it, and press Apply mouse driving."
+        //     : ready < total ? $"{total - ready} of {total} profile(s) still have controls that fight the mouse (the game may have reset them). Close the game and press Apply mouse driving."
+        //     : $"Mouse driving ready: press {MouseDriveConfig.ToggleName(s.MouseToggle)} while driving to switch it on or off.";
+
+        CoachAlertsBox.IsChecked = s.CoachAlerts;
+        TruckAlertsBox.IsChecked = s.TruckAlerts;
+        ShowThresholds(s.CoachThresholds, s.TruckThresholds);
+        SpeedingBox.IsChecked = s.SpeedingAlerts;
+        AlertsStatus.Text = DescribeAlerts(s);
+    }
+
+    static string DescribeAlerts(AppSettings s) => (s.CoachAlerts, s.TruckAlerts) switch
+    {
+        (true, true) => "Alerts on in coaches and trucks. They appear while you drive, and hide while the game is paused or closed.",
+        (true, false) => "Alerts on in coaches only.",
+        (false, true) => "Alerts on in trucks only.",
+        _ => "Alerts off.",
+    };
+
+    (TextBox Yellow, TextBox Red, string Name)[] ThresholdBoxes(bool coach) => coach
+        ? [(CoachAccelYellowBox, CoachAccelRedBox, "Coach acceleration"), (CoachBrakeYellowBox, CoachBrakeRedBox, "Coach braking"),
+           (CoachCornerYellowBox, CoachCornerRedBox, "Coach cornering")]
+        : [(TruckAccelYellowBox, TruckAccelRedBox, "Truck acceleration"), (TruckBrakeYellowBox, TruckBrakeRedBox, "Truck braking"),
+           (TruckCornerYellowBox, TruckCornerRedBox, "Truck cornering")];
+
+    void ShowThresholds(DrivingThresholds coach, DrivingThresholds truck)
+    {
+        static string F(double v) => v.ToString("0.00", CultureInfo.InvariantCulture);
+        foreach (var (t, isCoach) in new[] { (coach, true), (truck, false) })
+        {
+            var b = ThresholdBoxes(isCoach);
+            (b[0].Yellow.Text, b[0].Red.Text) = (F(t.AccelYellow), F(t.AccelRed));
+            (b[1].Yellow.Text, b[1].Red.Text) = (F(t.BrakeYellow), F(t.BrakeRed));
+            (b[2].Yellow.Text, b[2].Red.Text) = (F(t.CornerYellow), F(t.CornerRed));
+        }
+    }
+
+    DrivingThresholds ReadThresholds(bool coach)
+    {
+        var b = ThresholdBoxes(coach);
+        return new DrivingThresholds
+        {
+            AccelYellow = ReadG(b[0].Yellow, b[0].Name + ", yellow"), AccelRed = ReadG(b[0].Red, b[0].Name + ", red"),
+            BrakeYellow = ReadG(b[1].Yellow, b[1].Name + ", yellow"), BrakeRed = ReadG(b[1].Red, b[1].Name + ", red"),
+            CornerYellow = ReadG(b[2].Yellow, b[2].Name + ", yellow"), CornerRed = ReadG(b[2].Red, b[2].Name + ", red"),
+        }.Normalised();
+    }
+
+    static double ReadG(TextBox box, string name) =>
+        double.TryParse(box.Text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 && v <= 2
+            ? v
+            : throw new FormatException($"{name}: enter a g-force between 0.05 and 2, such as 0.25.");
+
+    // MOUSE DRIVING DISABLED:
+    // void ApplyMouseDrive_Click(object sender, RoutedEventArgs e) => Run(() =>
+    // {
+    //     var s = _app.Settings;
+    //     s.MouseDrive = MouseDriveBox.IsChecked == true;
+    //     s.MouseToggle = MouseToggleBox.SelectedValue is MouseToggle t ? t : MouseToggle.F8;
+    //     s.MouseSensitivity = Math.Round(MouseSensSlider.Value, 1);
+    //     s.MousePedalStrength = Math.Round(MousePedalSlider.Value, 1);
+    //     s.MouseIndicator = MouseIndicatorBox.IsChecked == true;
+    //     s.Save();
+    //     MouseDriveConfig.Write(s);
+    //     UpdateOverlay();
+    //     var controls = _app.SetMouseControls(s.MouseDrive);
+    //     return controls + (s.MouseDrive
+    //         ? $"Mouse driving on. In the game, press {MouseDriveConfig.ToggleName(s.MouseToggle)} to start steering with the mouse."
+    //         : "Mouse driving off.");
+    // });
+
+    void ApplyAlerts_Click(object sender, RoutedEventArgs e) => Run(() =>
+    {
+        var s = _app.Settings;
+        s.CoachThresholds = ReadThresholds(coach: true);
+        s.TruckThresholds = ReadThresholds(coach: false);
+        s.CoachAlerts = CoachAlertsBox.IsChecked == true;
+        s.TruckAlerts = TruckAlertsBox.IsChecked == true;
+        s.SpeedingAlerts = SpeedingBox.IsChecked == true;
+        s.Save();
+        UpdateOverlay();
+        return DescribeAlerts(s);
+    });
+
+    void DefaultThresholds_Click(object sender, RoutedEventArgs e) => ShowThresholds(DrivingThresholds.Coach, DrivingThresholds.Truck);
 
     // ---------- Game Information ----------
 

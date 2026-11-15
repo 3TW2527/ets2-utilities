@@ -85,5 +85,5 @@ public class SpeedTextTests
 
     [Fact]
     public void FrameLayoutMatchesPlugin() =>
-        Assert.Equal(24, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+        Assert.Equal(112, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
 }

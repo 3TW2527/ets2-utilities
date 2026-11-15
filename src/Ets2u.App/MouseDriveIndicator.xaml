@@ -1,0 +1,21 @@
+<Window x:Class="Ets2u.App.MouseDriveIndicator"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ETS2 Utilities mouse driving" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" FontFamily="Segoe UI">
+    <!-- Like OMSI's steering cross: left/right is the wheel, up is the throttle, down is the brake.
+         The white cross is where the mouse holds them. -->
+    <Border x:Name="Panel" Background="#A0101418" CornerRadius="6" Padding="6">
+        <Grid Width="180" Height="140">
+            <Border x:Name="ThrottleZone" Background="#2034C759" VerticalAlignment="Top" Height="70" CornerRadius="3,3,0,0"/>
+            <Border x:Name="BrakeZone" Background="#20E03A2F" VerticalAlignment="Bottom" Height="70" CornerRadius="0,0,3,3"/>
+            <Border Height="1" Background="#80FFFFFF" VerticalAlignment="Center"/>
+            <Border Width="1" Background="#80FFFFFF" HorizontalAlignment="Center"/>
+            <Canvas ClipToBounds="True">
+                <Border x:Name="CursorH" Width="22" Height="3" Background="White" CornerRadius="1.5"/>
+                <Border x:Name="CursorV" Width="3" Height="22" Background="White" CornerRadius="1.5"/>
+            </Canvas>
+        </Grid>
+    </Border>
+</Window>

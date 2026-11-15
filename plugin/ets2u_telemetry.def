@@ -2,3 +2,6 @@ LIBRARY ets2u_telemetry
 EXPORTS
 scs_telemetry_init=scs_telemetry_init
 scs_telemetry_shutdown=scs_telemetry_shutdown
+; MOUSE DRIVING DISABLED: restore these two (and define ETS2U_MOUSE_DRIVING) to bring it back.
+; scs_input_init=scs_input_init
+; scs_input_shutdown=scs_input_shutdown

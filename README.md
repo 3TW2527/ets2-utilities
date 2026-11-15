@@ -10,6 +10,8 @@ A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on an
 | Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | HUD & Dash | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | HUD & Dash | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
+| Driving | OMSI-style mouse driving: the mouse's place across the screen steers (heavier with speed), above or below the middle is throttle or brake | Input device in `ets2u_telemetry.dll`; steering lines in each profile's `controls.sii` |
+| Driving | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks (0.4 / 0.6 g for coaches, 0.45 / 0.65 g for trucks) | Telemetry plugin + on-screen overlay |
 | Game Information | Fuel price per country, and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs`, the installed `dlc_*.scs` and `locale.scs` |
 | Backups | Undo any change the app made | Copies taken before every write |
 
@@ -65,9 +67,40 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Map position | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
-| Speed overlay | Runs on your PC only |
+| Speed overlay, driving alerts, mouse driving | Run on your PC only |
 
 Don't use any of this on TruckersMP, which has its own rules and anti-cheat.
+
+## Mouse driving
+
+> **Currently disabled.** The UI, the app's calls and the plugin's input device are commented out (search for
+> `MOUSE DRIVING DISABLED`; the plugin's part is behind `ETS2U_MOUSE_DRIVING`, plus the two `scs_input_*`
+> lines in `plugin\ets2u_telemetry.def`). The Core classes (`MouseDriveConfig`, `MouseDriveControls`) and
+> `MouseDriveIndicator` are kept but unused. The text below describes the feature as it was.
+
+Install the plugin (HUD & Dash tab), tick **Let the mouse drive** on the Driving tab, then press F8
+(or Insert, or the middle mouse button) while driving to switch it on and off. It works the way
+OMSI 2 does; the maths follows [openOMSI](https://github.com/openOMSI-org/openOMSI)'s port of Omsi.exe:
+
+- The window's width is full left to full right lock at walking pace. Above 10 km/h the steering is
+  divided by the speed in tens of km/h, so at 50 km/h the same hand movement turns the wheel a fifth
+  as far. The wheel eases to the mouse over the first second after switching on, then follows within ~60 ms.
+- From the middle of the window up is the throttle, down is the brake (with a 5% dead zone so you can coast).
+- Hold the right mouse button to look round: the wheel and pedals stay put, as in OMSI.
+- ETS2 reads the mouse through DirectInput and keeps it from other programs while it has the focus,
+  so the plugin reads it the same way from inside the game, as a second (non-exclusive) DirectInput mouse.
+  The app doesn't need to be open.
+
+Applying it (with ETS2 closed) changes the camera's two mouse lines in each profile's `controls.sii` (for a
+Steam Cloud profile that's the local copy in `Documents\Euro Truck Simulator 2\steam_profiles\<id>`),
+backed up first and put back when you turn it off: `camlr` and `camud` take the mouse's movement times
+`(1 - semantical.camlr?0)` / `(1 - semantical.camud?0)`. The plugin reports 1 on those while the mouse
+steers, so the camera holds still, and 0 otherwise (switched off with F8, right button held, menus), so the
+mouse looks round as usual. Steering and keyboard steering are left alone. The app sets this up again on
+start if the game reset its controls.
+The steering itself goes
+through the game's `semantical.steering`, `aforward` and `abackward` inputs. While it's on, the plugin
+writes `%LOCALAPPDATA%\ets2u\mouse_trace.csv` (what the mouse asked for and what the wheel did).
 
 ## Requirements (to build)
 
@@ -111,6 +144,7 @@ dotnet test
 | Log | `%LOCALAPPDATA%\ets2u\log.txt` |
 | Generated mods | `Documents\Euro Truck Simulator 2\mod\ets2u_*.scs` |
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
+| Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
 
 Never commit game files or SCS tools; `.gitignore` excludes them.
 

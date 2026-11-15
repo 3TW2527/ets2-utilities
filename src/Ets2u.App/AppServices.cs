@@ -159,6 +159,80 @@ public sealed class AppServices
         return (gameUpdated ? $"ETS2 was updated to {Paths.GameVersion}. " : "") + ApplyMods();
     }
 
+    /// <summary>Profiles whose controls.sii is set up for mouse driving, and those that aren't.</summary>
+    public (int Ready, int Total) MouseControlsState()
+    {
+        int ready = 0, total = 0;
+        foreach (var path in ControlsFiles())
+        {
+            total++;
+            if (Core.Telemetry.MouseDriveControls.IsApplied(ReadControls(path))) ready++;
+        }
+        return (ready, total);
+    }
+
+    /// <summary>
+    /// Every profile's controls.sii. A Steam Cloud profile's saves live in Steam's userdata folder,
+    /// but its controls stay on this PC: Documents\Euro Truck Simulator 2\steam_profiles\&lt;id&gt;.
+    /// </summary>
+    IEnumerable<string> ControlsFiles()
+    {
+        var dirs = Profiles.SelectMany(p => new[]
+            {
+                p.Dir,
+                Path.Combine(Paths.SteamProfilesDir, p.FolderName),
+                Path.Combine(Paths.LocalProfilesDir, p.FolderName),
+            })
+            .Concat(Directory.Exists(Paths.SteamProfilesDir) ? Directory.EnumerateDirectories(Paths.SteamProfilesDir) : [])
+            .Concat(Directory.Exists(Paths.LocalProfilesDir) ? Directory.EnumerateDirectories(Paths.LocalProfilesDir) : []);
+        return dirs.Select(d => Path.GetFullPath(Path.Combine(d, Core.Telemetry.MouseDriveControls.FileName)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(File.Exists)
+            .ToList();
+    }
+
+    /// <summary>Mouse driving is on but a profile's controls aren't set up for it (the game can reset them).</summary>
+    public bool MouseControlsNeeded => Settings.MouseDrive && MouseControlsState() is var (ready, total) && ready < total;
+
+    static string ReadControls(string path) =>
+        System.Text.Encoding.UTF8.GetString(Core.Save.SiiCodec.Decode(File.ReadAllBytes(path)));
+
+    /// <summary>
+    /// Sets every profile's camera up to hold still while the mouse steers (and puts back what an
+    /// earlier version changed), or puts each profile's own values back.
+    /// </summary>
+    public string SetMouseControls(bool on)
+    {
+        var files = new Dictionary<string, byte[]>();
+        foreach (var path in ControlsFiles())
+        {
+            var text = ReadControls(path);
+            string changed;
+            if (on)
+            {
+                if (Core.Telemetry.MouseDriveControls.IsApplied(text)) continue;
+                var recorded = Settings.MouseControlsOriginals.GetValueOrDefault(path);
+                // The profile's own values: the file with anything an earlier version changed put back.
+                if (Core.Telemetry.MouseDriveControls.Read(Core.Telemetry.MouseDriveControls.Restore(text, recorded)) is { } own)
+                    Settings.MouseControlsOriginals[path] = own;
+                changed = Core.Telemetry.MouseDriveControls.Apply(text, recorded);
+            }
+            else
+            {
+                if (!Core.Telemetry.MouseDriveControls.IsApplied(text)) continue;
+                Settings.MouseControlsOriginals.Remove(path, out var original);
+                changed = Core.Telemetry.MouseDriveControls.Restore(text, original);
+            }
+            if (changed != text) files[path] = System.Text.Encoding.UTF8.GetBytes(changed);
+        }
+        if (files.Count == 0) return "";
+        Writer.Write(on ? "Set controls up for mouse driving" : "Put controls back after mouse driving", files);
+        Settings.Save();
+        return on
+            ? $"Set up the camera of {files.Count} profile(s) to hold still while the mouse steers (it looks round as usual otherwise). "
+            : $"Put back the camera settings of {files.Count} profile(s). ";
+    }
+
     readonly Dictionary<string, LevelTable?> _levelTables = new();
 
     public LevelTable? LevelTable(string gamePath)
