@@ -382,7 +382,37 @@ public class SaveEditorTests
         var (profile, slot, dir) = MakeProfile(encrypted: false);
         using (dir)
             Assert.Throws<ArgumentOutOfRangeException>(() => SaveEditor.Write(profile, slot,
-                new SaveValues(SaveEditor.MaxMoney + 1, 0, 0), new SafeWriter(new BackupService(dir.Path), () => false)));
+                new SaveValues(SaveEditor.SafeMoney + 1, 0, 0), new SafeWriter(new BackupService(dir.Path), () => false)));
+    }
+
+    [Fact]
+    public void TextSaveKeepsTheSafeMoneyCap()
+    {
+        var (_, slot, dir) = MakeProfile(encrypted: false);
+        using (dir)
+        {
+            var state = SaveEditor.Read(slot);
+            Assert.Equal(SaveEditor.SafeMoney, state.MaxMoney);
+            Assert.False(state.MoneyIs64Bit);
+        }
+    }
+
+    [Fact]
+    public void BinaryS64MoneyAllowsMoreThanTwoBillion()
+    {
+        var (profile, slot, dir) = MakeProfile(encrypted: false, BinarySave.Build(2000, 100, 50));
+        using (dir)
+        {
+            var state = SaveEditor.Read(slot);
+            Assert.True(state.MoneyIs64Bit);
+            Assert.Equal(SaveEditor.Max64BitMoney, state.MaxMoney);
+
+            var writer = new SafeWriter(new BackupService(Path.Combine(dir.Path, "b")), () => false);
+            SaveEditor.Write(profile, slot, new SaveValues(50_000_000_000, 100, 50), writer);
+            Assert.Equal(50_000_000_000, SaveEditor.Read(slot).Values!.Money);
+            Assert.Throws<ArgumentOutOfRangeException>(() => SaveEditor.Write(profile, slot,
+                new SaveValues(SaveEditor.Max64BitMoney + 1, 100, 50), writer));
+        }
     }
 
     [Fact]

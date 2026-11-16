@@ -32,6 +32,11 @@ public sealed record SaveEdit(EditMode Mode, long? Money, long? TruckXp, long? C
 public sealed record SaveState(SaveSlot Slot, SiiFormat Format, SaveValues? Values, string? Problem = null)
 {
     public bool Editable => Values is not null && Problem is null;
+
+    /// <summary>The most money this save accepts (see <see cref="SaveEditor.MoneyCap"/>).</summary>
+    public long MaxMoney { get; init; } = SaveEditor.SafeMoney;
+
+    public bool MoneyIs64Bit => MaxMoney > SaveEditor.SafeMoney;
 }
 
 /// <summary>
@@ -46,7 +51,19 @@ public static class SaveEditor
     public const string TruckXpKey = "experience_points";
     public const string CoachXpKey = "bus_experience_points";
 
-    public const long MaxMoney = 2_000_000_000;
+    /// <summary>Limit when the save doesn't show the money field is 64-bit: a text save, or a binary field of another type.</summary>
+    public const long SafeMoney = 2_000_000_000;
+
+    /// <summary>
+    /// Limit when the binary save stores money as s64: just under long.MaxValue (9,223,372,036,854,775,807),
+    /// leaving about 372 quadrillion of headroom so job income can't overflow it.
+    /// </summary>
+    public const long Max64BitMoney = 9_223_000_000_000_000_000;
+
+    const int S64 = 0x31;
+
+    /// <summary>The money limit for a save: 64-bit only when the binary save declares money_account as s64.</summary>
+    public static long MoneyCap(BsiiField? moneyField) => moneyField?.ValueType == S64 ? Max64BitMoney : SafeMoney;
 
     static readonly (string, string)[] BinaryFields =
         [("bank", MoneyKey), ("economy", TruckXpKey), ("economy", CoachXpKey)];
@@ -60,7 +77,7 @@ public static class SaveEditor
             return format switch
             {
                 SiiFormat.Text => new SaveState(slot, format, ReadValues(SiiDocument.Parse(plain))),
-                SiiFormat.Binary => new SaveState(slot, format, ValuesOf(FindBinary(plain))),
+                SiiFormat.Binary => BinaryState(slot, FindBinary(plain)),
                 _ => new SaveState(slot, format, null, "This file isn't a save the app recognises."),
             };
         }
@@ -80,6 +97,9 @@ public static class SaveEditor
             throw new InvalidDataException("Money or XP wasn't found in this save.");
         return byName;
     }
+
+    static SaveState BinaryState(SaveSlot slot, Dictionary<string, BsiiField> fields) =>
+        new(slot, SiiFormat.Binary, ValuesOf(fields)) { MaxMoney = MoneyCap(fields[MoneyKey]) };
 
     static SaveValues ValuesOf(Dictionary<string, BsiiField> f) => new(
         Convert.ToInt64(f[MoneyKey].Value),
@@ -117,7 +137,7 @@ public static class SaveEditor
     /// </summary>
     public static Backup Write(Profile profile, SaveSlot slot, SaveValues values, SafeWriter writer)
     {
-        if (values.Money < 0 || values.Money > MaxMoney) throw new ArgumentOutOfRangeException(nameof(values), "Money must be 0 to 2,000,000,000.");
+        if (values.Money < 0) throw new ArgumentOutOfRangeException(nameof(values), "Money can't be negative.");
         if (values.TruckXp < 0 || values.CoachXp < 0) throw new ArgumentOutOfRangeException(nameof(values), "XP can't be negative.");
         if (values.TruckXp > uint.MaxValue || values.CoachXp > uint.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(values), "XP must be at most 4,294,967,295.");
@@ -148,8 +168,15 @@ public static class SaveEditor
         return writer.Write($"Money and XP for {profile.Name} / {slot.Name}", files);
     }
 
+    static void CheckMoney(long money, long cap)
+    {
+        if (money > cap)
+            throw new ArgumentOutOfRangeException(nameof(money), $"Money must be at most {cap.ToString("N0", CultureInfo.InvariantCulture)} for this save.");
+    }
+
     static byte[] PatchText(byte[] plain, SaveValues values)
     {
+        CheckMoney(values.Money, SafeMoney);
         var game = SiiDocument.Parse(plain);
         Set(game, "bank", MoneyKey, values.Money);
         Set(game, "economy", TruckXpKey, values.TruckXp);
@@ -160,6 +187,7 @@ public static class SaveEditor
     static byte[] PatchBinary(byte[] plain, SaveValues values)
     {
         var fields = FindBinary(plain);
+        CheckMoney(values.Money, MoneyCap(fields[MoneyKey]));
         var patched = (byte[])plain.Clone();
         BsiiReader.Patch(patched, fields[MoneyKey], values.Money);
         BsiiReader.Patch(patched, fields[TruckXpKey], values.TruckXp);

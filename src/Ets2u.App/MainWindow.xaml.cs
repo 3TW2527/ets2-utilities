@@ -276,7 +276,9 @@ public partial class MainWindow : Window
 
         if (_save is not null)
             SaveStateText.Text = _save.Editable
-                ? $"{(_save.Format == Core.Save.SiiFormat.Binary ? "Binary" : "Text")} save: ready to edit."
+                ? $"{(_save.Format == Core.Save.SiiFormat.Binary ? "Binary" : "Text")} save: ready to edit. " +
+                  $"Money up to {_save.MaxMoney.ToString("N0", CultureInfo.CurrentCulture)}" +
+                  (_save.MoneyIs64Bit ? " (the save stores money as a 64-bit number)." : ".")
                 : "This save can't be edited: " + _save.Problem;
         EditGrid.IsEnabled = ApplySaveButton.IsEnabled = _save?.Editable == true;
         CoachXpBox.IsEnabled = v?.CoachXp is not null;
@@ -339,7 +341,7 @@ public partial class MainWindow : Window
         PreviewText.Text = error ?? (after is null ? "" :
             $"After Apply: money {after.Money:N0}, truck XP {after.TruckXp:N0}" +
             (after.CoachXp is { } c ? $", coach XP {c:N0}" : "") +
-            (after.Money is < 0 or > SaveEditor.MaxMoney ? "  (money out of range)" : ""));
+            (after.Money < 0 || after.Money > _save!.MaxMoney ? "  (money out of range)" : ""));
     }
 
     void Preset_Click(object sender, RoutedEventArgs e)
@@ -771,41 +773,10 @@ public partial class MainWindow : Window
     {
         if (CityGrid.SelectedItem is not CityRow row) return;
         var copied = text(row.City);
-        _app.Status(TrySetClipboard(copied)
+        var owner = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        _app.Status(ClipboardText.TrySet(owner, copied)
             ? $"Copied \"{copied}\"."
             : "The clipboard is in use by another program. Try again.");
-    }
-
-    /// <summary>
-    /// Windows often reports the clipboard as busy (a clipboard manager is reading it) although the
-    /// text was set, so a failure only counts if the text isn't there afterwards.
-    /// </summary>
-    static bool TrySetClipboard(string text)
-    {
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            try
-            {
-                Clipboard.SetDataObject(text, true);
-                return true;
-            }
-            catch (System.Runtime.InteropServices.ExternalException)
-            {
-                for (var check = 0; check < 10; check++)
-                {
-                    System.Threading.Thread.Sleep(50);
-                    try
-                    {
-                        if (Clipboard.GetText() == text) return true;
-                        break; // readable, but not our text: set it again
-                    }
-                    catch (System.Runtime.InteropServices.ExternalException)
-                    {
-                    }
-                }
-            }
-        }
-        return false;
     }
 
     // ---------- Backups ----------

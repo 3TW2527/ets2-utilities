@@ -240,6 +240,9 @@ Never commit game files or SCS tools; `.gitignore` excludes them.
   Game 1.62 writes BSII version 3, which adds types 0x3B-0x3E (IDs and arrays of IDs). Money (s64) and both XP
   counters (u32) are fixed-size, so a binary save is edited by overwriting those bytes; the edited file is written
   back unencrypted, still binary. An unknown value type stops the edit with a message instead of guessing.
+- Money limit: when a binary save declares `money_account` as s64, money can go up to 9,223,000,000,000,000,000
+  (just under the s64 maximum of 9,223,372,036,854,775,807, leaving headroom so job income can't overflow it). Text saves, and any other field type, keep the
+  2,000,000,000 limit, because a text save doesn't show how wide the field is.
 - The archive reader (HashFS v2) follows the format documented by
   [Archive::SCS](https://metacpan.org/pod/Archive::SCS::HashFS2); CityHash64 is Google's algorithm (MIT).
 
