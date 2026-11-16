@@ -42,6 +42,9 @@ public static class Workshop
     public static string? FindItemDir(GamePaths paths, string id) =>
         ContentDirs(paths).Select(d => Path.Combine(d, id)).FirstOrDefault(Directory.Exists);
 
+    /// <summary>The item's folder: Steam's, when subscribed, otherwise the app's own download.</summary>
+    public static string? FindAnyItemDir(GamePaths paths, string id) => FindItemDir(paths, id) ?? WorkshopCache.Find(id);
+
     public static IReadOnlyList<WorkshopItem> List(GamePaths paths) =>
         ContentDirs(paths)
             .SelectMany(Directory.EnumerateDirectories)

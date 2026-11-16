@@ -62,12 +62,13 @@ public partial class MainWindow
         LiveryIntro.Text =
             $"Mod: {_app.LiveryMod.FileName}. New coach liveries each come as their own mod; this packs the ones you choose into one " +
             "optional mod with your own file name, so Mod Manager shows one entry and your pack never clashes with another player's. " +
-            "Local mods (.scs, .zip or a folder) and Steam Workshop items can both go in.";
+            "Local mods (.scs, .zip or a folder) and Steam Workshop items can both go in; Workshop items can be added by link, without subscribing.";
         LiveryEnabledBox.IsChecked = s.Enabled;
         LiveryPermissionBox.IsChecked = s.WorkshopPermissionConfirmed;
         _liveryRows = s.Sources.Select(x => new LiveryRow(x)).ToList();
         LiverySourceGrid.ItemsSource = _liveryRows;
         LiveryBuildButton.IsEnabled = !_liveryBusy;
+        RefreshSteamAccount();
         CheckLiverySources();
     }
 
@@ -101,7 +102,10 @@ public partial class MainWindow
                 rows[i].PaintJobs = r.Problem is null ? r.PaintJobs.ToString() : "-";
                 rows[i].State = r.Problem
                                 ?? (r.PaintJobs == 0 ? "No paint jobs: this doesn't look like a livery mod." : "Ready")
-                                + (r.Overrides.Count > 0 ? $". Also replaces {r.Overrides.Count} game file(s), e.g. {r.Overrides[0]}" : "");
+                                + (r.Overrides.Count > 0 ? $". Also replaces {r.Overrides.Count} game file(s), e.g. {r.Overrides[0]}" : "")
+                                + (r.Problem is null && rows[i].Source is { Kind: LiverySourceKind.Workshop, WorkshopId: { } wid }
+                                    ? Workshop.FindItemDir(paths, wid) is null ? " (downloaded by the app)" : " (from your Steam subscription)"
+                                    : "");
                 // A Workshop item added before Steam downloaded it gets its real name once it's there.
                 if (r.Problem is null && rows[i].Source.Kind == LiverySourceKind.Workshop
                                       && rows[i].Source.Name == $"Workshop item {rows[i].Source.WorkshopId}" && r.Package is { } pkg)
@@ -214,6 +218,10 @@ public partial class MainWindow
         if (SelectedLivery is not { } row) return;
         _liveryRows.Remove(row);
         SaveLiveryPage();
+        // The app's own download of it goes too, unless another entry still uses it.
+        if (row.Source is { Kind: LiverySourceKind.Workshop, WorkshopId: { } removedId }
+            && !_liveryRows.Any(r => r.Source.Kind == LiverySourceKind.Workshop && r.Source.WorkshopId == removedId))
+            WorkshopCache.Remove(removedId);
         _app.Status($"Removed {row.Name} from the list. Build the pack again to take it out.");
         RefreshLiveries();
         LoadWorkshopList();
@@ -290,29 +298,6 @@ public partial class MainWindow
     void WorkshopPage_Click(object sender, RoutedEventArgs e)
     {
         if (WorkshopGrid.SelectedItem is WorkshopRow row) OpenUrl(row.Item.PageUrl);
-    }
-
-    /// <summary>
-    /// A pasted link or ID. Steam downloads Workshop items for subscribers only, so one that isn't here yet
-    /// opens in the Steam client to subscribe; it goes in the list anyway and is used once Steam has it.
-    /// </summary>
-    void WorkshopAddId_Click(object sender, RoutedEventArgs e)
-    {
-        if (Workshop.ParseId(WorkshopIdBox.Text) is not { } id)
-        {
-            _app.Status("Paste a Workshop link (…filedetails/?id=123456789) or the number itself.");
-            return;
-        }
-        WorkshopIdBox.Text = "";
-        if (Workshop.FindItemDir(_app.Paths, id) is { } dir)
-        {
-            var item = Workshop.Describe(dir, _app.Paths.GameVersion);
-            AddLiverySource(new LiverySource { Kind = LiverySourceKind.Workshop, WorkshopId = id, Name = item.Name, Author = item.Author });
-            return;
-        }
-        AddLiverySource(new LiverySource { Kind = LiverySourceKind.Workshop, WorkshopId = id, Name = $"Workshop item {id}" });
-        OpenUrl(Workshop.SteamClientUrl(id));
-        _app.Status($"Workshop item {id} isn't downloaded yet: subscribe to it in Steam (opened now), wait for the download, then press Refresh.");
     }
 
     void OpenUrl(string url)

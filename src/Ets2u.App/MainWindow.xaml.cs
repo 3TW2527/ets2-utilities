@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Ets2u.Core;
+using Ets2u.Core.Liveries;
 using Ets2u.Core.Features;
 using Ets2u.Core.Info;
 using Ets2u.Core.Mods;
@@ -43,8 +44,8 @@ public partial class MainWindow : Window
             // try { MouseDriveConfig.Write(_app.Settings); }
             // catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppDirs.Log("mouse_drive.ini: " + ex.Message); }
             Run(() => _app.RebuildIfGameUpdated() ?? "Ready");
-            // Liveries are big: check the pack's sources for updates off the UI thread.
-            RunLiveryBuild(progress => _app.RebuildLiveryPackIfChanged(progress), quietWhenNull: true);
+            // Liveries are big: download Workshop updates, then check the pack's sources off the UI thread.
+            StartLiveries();
             LoadWorkshopList();
             // The game can reset controls.sii when its control options change: set them up again.
             // if (_app.MouseControlsNeeded && !_app.GameRunning) Run(() => _app.SetMouseControls(true) + "Mouse driving controls set up again.");
@@ -52,6 +53,8 @@ public partial class MainWindow : Window
         Activated += (_, _) => UpdateBanner();
         Closed += (_, _) =>
         {
+            _downloadCts?.Cancel();
+            DepotDownloaderTool.StopRunning();
             _overlay?.Close();
             _alerts?.Close();
             _gMeter?.Close();

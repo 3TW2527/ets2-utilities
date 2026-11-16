@@ -13,7 +13,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
 | **Mods** · Route advisor | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
-| **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
+| **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction | Telemetry plugin + on-screen overlay |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
@@ -63,17 +63,39 @@ millions of lines.
 
 Every new livery comes as its own mod. The Livery pack page puts the ones you choose into one mod,
 `ets2u_liveries_<tag>.scs` (your own tag, like every mod here, and optional for Convoy). Sources can be
-local mods (`.scs` as zip or HashFS v2, `.zip`, or an unpacked folder) or Steam Workshop items you're
-subscribed to; paste a Workshop link to open it in Steam and subscribe. For a Workshop item the app picks
-the package the game would load for its version (`versions.sii`). Files at a mod's root (manifest,
-pictures) are left out; if two mods hold the same file, the one higher in the list wins and the clash is
-shown. On every start the app checks the sources (Steam updates Workshop items by itself) and rebuilds the
-pack when one changed; a source that's gone stops the rebuild instead of silently dropping its liveries.
+local mods (`.scs` as zip or HashFS v2, `.zip`, or an unpacked folder) or Steam Workshop items. For a Workshop
+item the app picks the package the game would load for its version (`versions.sii`). Files at a mod's root
+(manifest, pictures) are left out; if two mods hold the same file, the one higher in the list wins and the
+clash is shown. A source that's gone stops a rebuild instead of silently dropping its liveries.
+
+### Workshop items without subscribing
+
+Paste a Workshop link or ID and press **Check**. The app asks Steam's public Web API (no key or login) about
+the item and shows its title, creator, size, update date and tags, whether it's for ETS2 and whether it's
+tagged as a paint job, before anything is downloaded. **Download and add** then downloads it into
+`%LOCALAPPDATA%\ets2u\workshop\<id>\` with [DepotDownloader](https://github.com/SteamRE/DepotDownloader),
+so you don't subscribe and no stray mod appears in Mod Manager.
+
+- DepotDownloader runs as its own program. The app uses a copy installed with winget
+  (`winget install SteamRE.DepotDownloader`) if there is one, otherwise a `DepotDownloader\` folder beside
+  `ets2u.exe`, otherwise it downloads its own: release 3.4.0 from GitHub, checked against a pinned SHA-256,
+  into `%LOCALAPPDATA%\ets2u\DepotDownloader\`.
+- ETS2 Workshop content needs a Steam account that owns the game. The first download shows a QR code in the
+  app; scan it in the Steam mobile app (Steam Guard → Scan a QR code). DepotDownloader remembers that
+  login (in .NET isolated storage), so later downloads, including the update checks on start, run without
+  asking. The app only keeps the account name. If the remembered login stops working, the next download you
+  start asks for a QR code again; the check on start never does, it only reports it. **Forget sign-in**
+  drops the account name; to end DepotDownloader's session, remove it from Authorized devices in your
+  Steam account settings.
+- On every start (with the pack switched on), the app asks Steam when each downloaded item last changed,
+  downloads the ones that did and rebuilds the pack. **Download missing** does the same on demand.
+- Items you're subscribed to are still read from Steam's own copy, which Steam keeps up to date. If you
+  unsubscribe from one, the app downloads its own copy.
 
 **Only repack Workshop items whose creators allow editing and redistribution.** The app asks you to
 confirm this before it builds a pack that contains Workshop items, and lists every creator in the pack's
 description. Don't share a pack with other people's work in it without their permission. After enabling
-the pack, turn the original livery mods off in Mod Manager (keep them subscribed: the pack is built from them).
+the pack, turn off any of the original livery mods you're subscribed to in Mod Manager.
 
 ## Install
 
@@ -203,6 +225,8 @@ dotnet test
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
 | Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
 | Saved destination display texts | `%APPDATA%\ets2u\destination_texts.txt` |
+| Workshop items downloaded by the app | `%LOCALAPPDATA%\ets2u\workshop\<id>\` |
+| DepotDownloader (when the app installed it) | `%LOCALAPPDATA%\ets2u\DepotDownloader\` |
 
 Never commit game files or SCS tools; `.gitignore` excludes them.
 
@@ -222,4 +246,5 @@ Never commit game files or SCS tools; `.gitignore` excludes them.
 ## Licence
 
 GPL-3.0; see [LICENSE](LICENSE). The speed plugin is built against SCS Software's telemetry SDK (MIT), which
-is not included here. Euro Truck Simulator 2 and its game files belong to SCS Software; this project ships none of them.
+is not included here. DepotDownloader (GPL-2.0, SteamRE) is not included either: it's run as a separate
+program, downloaded from its own GitHub release when needed. Euro Truck Simulator 2 and its game files belong to SCS Software; this project ships none of them.

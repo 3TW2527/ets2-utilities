@@ -436,17 +436,53 @@
                             <Button Content="Move down" Click="LiveryDown_Click" Margin="0,0,8,6"/>
                             <Button Content="Remove" Click="LiveryRemove_Click" Margin="0,0,8,6"/>
                             <Button Content="Open Workshop page" Click="LiverySourcePage_Click" Margin="0,0,8,6"/>
+                            <Button x:Name="WorkshopDownloadMissingButton" Content="Download missing" Click="WorkshopDownloadMissing_Click" Margin="0,0,8,6"
+                                    ToolTip="Downloads Workshop items in the list that aren't on this PC yet, or have been updated on the Workshop"/>
                         </WrapPanel>
 
-                        <TextBlock Style="{StaticResource H}" Text="Add from the Steam Workshop"/>
+                        <TextBlock Style="{StaticResource H}" Text="Add from the Steam Workshop by link"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="These are the ETS2 Workshop items this PC is subscribed to. To add one you aren't subscribed to, paste its link or ID: the app opens it in Steam so you can subscribe, then press Refresh once Steam has downloaded it. Updates Steam downloads are picked up the next time the app starts."/>
+                                   Text="Paste a Workshop link or ID and press Check: the app reads the item from Steam and shows what it is before anything is downloaded. Adding it downloads it into the app (with DepotDownloader), so you don't subscribe and no extra mod shows up in Mod Manager. The app checks for updates every time it starts."/>
                         <StackPanel Orientation="Horizontal" Margin="0,2,0,6">
-                            <TextBox x:Name="WorkshopIdBox" Width="320" Margin="0,0,8,0"/>
-                            <Button Content="Add link or ID" Click="WorkshopAddId_Click"/>
-                            <CheckBox x:Name="WorkshopLiveriesOnlyBox" Content="Only show mods with paint jobs" IsChecked="True"
-                                      VerticalAlignment="Center" Margin="12,0,0,0" Click="WorkshopFilter_Click"/>
+                            <TextBox x:Name="WorkshopIdBox" Width="420" Margin="0,0,8,0" KeyDown="WorkshopIdBox_KeyDown"/>
+                            <Button x:Name="WorkshopCheckButton" Content="Check" Click="WorkshopCheck_Click" MinWidth="70"/>
                         </StackPanel>
+                        <Border x:Name="WorkshopCheckPanel" Visibility="Collapsed" BorderBrush="#C9CED6" BorderThickness="1"
+                                CornerRadius="4" Padding="10" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Image x:Name="WorkshopPreview" Width="128" Height="128" Stretch="UniformToFill" Margin="0,0,12,0"
+                                       VerticalAlignment="Top"/>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock x:Name="WorkshopCheckTitle" FontWeight="Bold" FontSize="14" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="WorkshopCheckInfo" Style="{StaticResource Note}" Margin="0,2,0,4"/>
+                                    <TextBlock x:Name="WorkshopCheckResult" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <WrapPanel>
+                                        <Button x:Name="WorkshopAddCheckedButton" Content="Download and add" Click="WorkshopAddChecked_Click" Margin="0,0,8,6"/>
+                                        <Button Content="Open Workshop page" Click="WorkshopCheckPage_Click" Margin="0,0,8,6"/>
+                                        <Button Content="Cancel" Click="WorkshopCheckCancel_Click" Margin="0,0,8,6"/>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <StackPanel x:Name="WorkshopDownloadPanel" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,6">
+                            <ProgressBar x:Name="WorkshopProgress" Width="220" Height="14" Maximum="100" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="WorkshopDownloadText" Margin="8,0,8,0" VerticalAlignment="Center"/>
+                            <Button Content="Cancel" Click="WorkshopDownloadCancel_Click"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock x:Name="SteamAccountText" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <Button x:Name="SteamSignOutButton" Content="Forget sign-in" Click="SteamSignOut_Click"/>
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource H}" Text="Workshop items you're subscribed to"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Items Steam has already downloaded for you can be added from this list; Steam keeps them up to date. If you unsubscribe from one later, the app downloads its own copy."/>
+                        <CheckBox x:Name="WorkshopLiveriesOnlyBox" Content="Only show mods with paint jobs" IsChecked="True"
+                                  Margin="0,2,0,6" Click="WorkshopFilter_Click"/>
                         <DataGrid x:Name="WorkshopGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                                   GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Extended" Height="200"
                                   MouseDoubleClick="WorkshopAdd_Click">
@@ -477,7 +513,7 @@
                                 </StackPanel>
                                 <TextBlock x:Name="LiveryStatus" Style="{StaticResource Status}" Margin="0,6,0,0"/>
                                 <TextBlock Style="{StaticResource Note}"
-                                           Text="After enabling the pack in Mod Manager, turn the original livery mods off there so each livery isn't loaded twice. Keep them subscribed: the pack is rebuilt from them whenever they update."/>
+                                           Text="After enabling the pack in Mod Manager, turn off any original livery mods you're subscribed to, so each livery isn't loaded twice (items added by link were never subscribed, so there's nothing to turn off). The pack is rebuilt whenever one of its mods updates."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

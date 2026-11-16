@@ -19,6 +19,12 @@ public sealed class LiverySource
 
     public string? WorkshopId { get; set; }
 
+    /// <summary>
+    /// For a Workshop item the app downloaded itself: the item's Workshop update time (Unix seconds) when
+    /// it was downloaded. A newer one on the Workshop means it's downloaded again.
+    /// </summary>
+    public long? DownloadedUpdated { get; set; }
+
     /// <summary>Shown in the app and in the pack's description.</summary>
     public string Name { get; set; } = "";
 
@@ -39,6 +45,12 @@ public sealed class LiveryPackSettings
 
     /// <summary>The user confirmed the creators of the Workshop items allow repacking.</summary>
     public bool WorkshopPermissionConfirmed { get; set; }
+
+    /// <summary>
+    /// The Steam account DepotDownloader remembers a login for, used to download Workshop items without
+    /// subscribing. Only the name: the login itself stays with DepotDownloader.
+    /// </summary>
+    public string? SteamAccount { get; set; }
 
     /// <summary>What the pack was last built from (see <see cref="LiveryPack.Fingerprint"/>); a change means it's rebuilt.</summary>
     public string? BuiltFingerprint { get; set; }
@@ -89,8 +101,8 @@ public static class LiveryPack
     {
         if (source.Kind == LiverySourceKind.Local)
             return source.Path is { } p && (File.Exists(p) || Directory.Exists(p)) ? (p, null) : (null, "The file or folder is gone.");
-        var dir = source.WorkshopId is null ? null : Workshop.FindItemDir(paths, source.WorkshopId);
-        if (dir is null) return (null, "Not downloaded: subscribe to it on the Workshop and let Steam download it.");
+        var dir = source.WorkshopId is null ? null : Workshop.FindAnyItemDir(paths, source.WorkshopId);
+        if (dir is null) return (null, "Not downloaded yet: press \"Download missing\" on the Livery pack page.");
         return Workshop.PickPackage(dir, paths.GameVersion) is { } package
             ? (package, null)
             : (null, "No version of this item fits the installed game.");
