@@ -123,8 +123,9 @@ public sealed class TelemetryHub : IDisposable
         {
             _detector.Reset(now);
         }
-        Trip.Step(now, frame?.SpeedMs, coach, news);
-        if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news) is { } finished)
+        var scale = (frame ?? raw)?.Scale ?? 1;
+        Trip.Step(now, frame?.SpeedMs, coach, news, scale);
+        if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished)
         {
             try { JobFinished?.Invoke(finished); }
             catch (Exception ex) { AppDirs.Log("Job summary: " + ex); }

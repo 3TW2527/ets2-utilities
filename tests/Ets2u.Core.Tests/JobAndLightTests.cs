@@ -209,6 +209,46 @@ public class JobTrackerTests
     }
 
     [Fact]
+    public void AJobCountsInGameTime()
+    {
+        var jobs = new JobTracker();
+        var plugin = new Plugin();
+        var now = T0;
+        Drive(jobs, plugin, ref now, 1, 0);
+        plugin.SetJob(2, RealBusJob);
+        for (var i = 0; i < 600; i++) // a minute at 20 m/s on a road at scale 16
+        {
+            now += TimeSpan.FromMilliseconds(100);
+            jobs.Step(now, plugin.Frame(), 20, true, [], 16);
+        }
+        var trip = jobs.Current()!.Trip;
+        Assert.InRange(trip.DrivingTime.TotalMinutes, 15.9, 16.1);
+        Assert.InRange(trip.DistanceKm, 19.1, 19.3);
+        Assert.InRange(trip.RealDistanceKm!.Value, 1.19, 1.21);
+    }
+
+    /// <summary>The job saved by 0.12.0 on 21 Nov, as it was in coach_jobs.json: real time and distance only.</summary>
+    [Fact]
+    public void AJobSavedInRealTimeIsPutInGameTime()
+    {
+        var events = Enumerable.Range(0, 10).Select(i => new TripEvent(DrivingEventKind.Cornering, AlertLevel.Yellow, T0, T0, "Cornering", "", "0.40 g", 0.4, 50, 50, true))
+            .Concat(Enumerable.Range(0, 6).Select(i => new TripEvent(DrivingEventKind.Speeding, AlertLevel.Red, T0, T0, "Speeding", "", "70 km/h", 70, 70, 70, true)))
+            .ToList();
+        var real = new TripSummary(T0, T0.AddMinutes(7.5), TimeSpan.Parse("00:06:27.2779740"), 5.987700324162971, 80, true, false, events);
+        // What 0.12.0 showed: (10 + 2 x 6) / 6.45 real minutes, per 10 hours.
+        Assert.Equal(2045, 22 / real.DrivingTime.TotalHours * 10, 0);
+        var saved = new JobSummary(T0, T0.AddMinutes(7.5), JobKind.Bus, JobOutcome.Ended,
+            JobText.Parse(RealBusJob.Replace("bus.stages.count=1", "planned_distance.km=94")), null, null, real);
+        var fixedUp = JobLog.InGameTime(saved);
+        Assert.Equal(94, fixedUp.Trip.DistanceKm);
+        Assert.Equal(5.99, fixedUp.Trip.RealDistanceKm!.Value, 2);
+        Assert.InRange(fixedUp.Trip.DrivingTime.TotalMinutes, 101, 102); // 6.45 min x 15.7
+        Assert.InRange(fixedUp.Trip.Score!.Value, 129, 131);
+        // Once is enough: it now has real figures beside the game's.
+        Assert.Same(fixedUp, JobLog.InGameTime(fixedUp));
+    }
+
+    [Fact]
     public void SavedJobsReadBack()
     {
         var path = Path.Combine(Path.GetTempPath(), $"ets2u_jobs_{Guid.NewGuid():N}.json");
@@ -238,8 +278,8 @@ public class JobTrackerTests
 
     [Fact]
     public void TheFrameMatchesThePluginsLayout() =>
-        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[1024], gameplay_count, gameplay[4][512]
-        Assert.Equal(48 + 64 + 8 + 1024 + 4 + 2048, Marshal.SizeOf<TelemetryFrame>());
+        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[1024], gameplay_count, gameplay[4][512], local_scale
+        Assert.Equal(48 + 64 + 8 + 1024 + 4 + 2048 + 4, Marshal.SizeOf<TelemetryFrame>());
 }
 
 public class GMeterTests(ITestOutputHelper output)

@@ -90,6 +90,7 @@ public class SpeedTextTests
         Assert.Equal(112, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobSeq)));
         Assert.Equal(120, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobInfoRaw)));
         Assert.Equal(1144, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameplayCount)));
-        Assert.Equal(3196, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+        Assert.Equal(3196, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.LocalScale)));
+        Assert.Equal(3200, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
     }
 }

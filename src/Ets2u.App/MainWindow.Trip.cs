@@ -318,8 +318,7 @@ public partial class MainWindow
             (false, true) => " · truck",
             _ => "",
         };
-        TripTotalsText.Text = string.Create(c,
-            $"{TripSummary.FormatDuration(trip.DrivingTime)} driving · {trip.DistanceKm:0.0} km · top speed {trip.TopKmh:0} km/h{vehicle}");
+        TripTotalsText.Text = string.Create(c, $"{trip.DrivingText} · {trip.DistanceText} · top speed {trip.TopKmh:0} km/h{vehicle}");
 
         if (trip.Score is { } score)
         {
@@ -327,13 +326,14 @@ public partial class MainWindow
             TripScoreText.Text = Math.Round(score).ToString("0", c);
             TripScoreBadge.Background = band is { } b ? TripLook.Fill(b) : TripLook.Green;
             TripScoreLabel.Text = "Safety score";
-            TripScoreBadge.ToolTip = "Events per 10 hours of driving, a red event counting as two. Green under 20, yellow under 40, red from 40.";
+            TripScoreBadge.ToolTip = "Events per 10 hours of driving in game time (as the game's clock and job screens count it), " +
+                                     "a red event counting as two. Green under 20, yellow under 40, red from 40.";
         }
         else
         {
             TripScoreText.Text = "–";
             TripScoreBadge.Background = TripLook.Grey;
-            TripScoreLabel.Text = "Score after 1 min";
+            TripScoreLabel.Text = "Score after 10 min";
             TripScoreBadge.ToolTip = null;
         }
 

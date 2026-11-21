@@ -168,7 +168,8 @@ public sealed class JobTracker
     /// isn't running); <paramref name="speedMs"/> is null while paused. Returns the coach job that just
     /// finished, if one did.
     /// </summary>
-    public JobSummary? Step(DateTime now, TelemetryFrame? raw, float? speedMs, bool coach, IEnumerable<DrivingEvent> news)
+    public JobSummary? Step(DateTime now, TelemetryFrame? raw, float? speedMs, bool coach, IEnumerable<DrivingEvent> news,
+                            double scale = 1)
     {
         lock (_lock)
         {
@@ -199,7 +200,7 @@ public sealed class JobTracker
                         _job = job; // the same job, updated (e.g. cargo loaded)
                 }
             }
-            _trip?.Step(now, speedMs, coach, news);
+            _trip?.Step(now, speedMs, coach, news, scale);
             return finished;
         }
     }
@@ -250,7 +251,8 @@ public static class JobLog
         path ??= FilePath;
         try
         {
-            return File.Exists(path) ? JsonSerializer.Deserialize<List<JobSummary>>(File.ReadAllText(path), Json) ?? [] : [];
+            var jobs = File.Exists(path) ? JsonSerializer.Deserialize<List<JobSummary>>(File.ReadAllText(path), Json) ?? [] : [];
+            return jobs.Select(InGameTime).ToList();
         }
         catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException)
         {
@@ -258,6 +260,33 @@ public static class JobLog
             return [];
         }
     }
+
+    /// <summary>
+    /// A job saved before 0.12.1 counted real time and distance only. The game's own distance for the job
+    /// (from its end event, or the planned one if it ran to the end) against the real distance driven gives
+    /// the time scale it was driven at, so its totals and score can be put in the game's terms too.
+    /// </summary>
+    public static JobSummary InGameTime(JobSummary job)
+    {
+        var trip = job.Trip;
+        if (trip.RealDrivingTime is not null || trip.DistanceKm < 0.1) return job;
+        var gameKm = Km(job.Result?.GetValueOrDefault("distance.km"))
+                     ?? (job.Outcome == JobOutcome.Cancelled ? null : Km(job.Job.GetValueOrDefault("planned_distance.km")));
+        if (gameKm is not { } km) return job;
+        var scale = km / trip.DistanceKm;
+        if (scale is < 2 or > 40) return job;
+        return job with
+        {
+            Trip = trip with
+            {
+                DrivingTime = trip.DrivingTime * scale, DistanceKm = km,
+                RealDrivingTime = trip.DrivingTime, RealDistanceKm = trip.DistanceKm,
+            },
+        };
+    }
+
+    static double? Km(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var km) && km > 0 ? km : null;
 
     public static void Save(IEnumerable<JobSummary> jobs, string? path = null)
     {

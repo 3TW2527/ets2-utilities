@@ -325,43 +325,48 @@ public class TripTests
         trip.Step(T0, 20, false, d.Update(T0, -0.5f, 0, 20, 0));
         trip.Start(T0);
         d.Reset(T0);
-        // 2 minutes at 72 km/h (20 m/s), 20 ms frames: 2.4 km.
+        // 2 minutes at 72 km/h (20 m/s), 20 ms frames: 2.4 km, on a road at the game's time scale of 19.
         for (var ms = 0; ms <= 120_000; ms += 20)
         {
             var now = T0.AddMilliseconds(ms);
             var braking = ms is >= 30_000 and < 31_000 ? -0.3f : 0;
-            trip.Step(now, 20, true, d.Update(now, braking, 0, 20, 0));
+            trip.Step(now, 20, true, d.Update(now, braking, 0, 20, 0), 19);
         }
         // A pause: no frames, then a minute later the game is back. The gap isn't driving.
-        trip.Step(T0.AddSeconds(150), null, true, []);
-        trip.Step(T0.AddSeconds(180), 20, true, []);
+        trip.Step(T0.AddSeconds(150), null, true, [], 19);
+        trip.Step(T0.AddSeconds(180), 20, true, [], 19);
         trip.Stop(T0.AddSeconds(181));
         trip.Step(T0.AddSeconds(200), 20, true, d.Update(T0.AddSeconds(200), -0.5f, 0, 20, 0));
 
         var s = trip.Snapshot()!;
         Assert.False(s.Capturing);
-        Assert.Equal(120, s.DrivingTime.TotalSeconds, 0);
-        Assert.Equal(2.4, s.DistanceKm, 2);
+        // In the game's terms 38 minutes and 45.6 km; really 2 minutes and 2.4 km.
+        Assert.Equal(120 * 19, s.DrivingTime.TotalSeconds, 0);
+        Assert.Equal(2.4 * 19, s.DistanceKm, 2);
+        Assert.Equal(120, s.RealDrivingTime!.Value.TotalSeconds, 0);
+        Assert.Equal(2.4, s.RealDistanceKm!.Value, 2);
+        Assert.Equal("38 min 00 s driving (2 min 00 s real)", s.DrivingText);
+        Assert.Equal("45.6 km (2.4 km driven)", s.DistanceText);
         Assert.Equal(72, s.TopKmh, 1);
         Assert.True(s.InCoach);
         Assert.False(s.InTruck);
         var e = Assert.Single(s.Events);
         Assert.Equal((DrivingEventKind.Braking, AlertLevel.Yellow, "Braking"), (e.Kind, e.Level, e.Category));
-        // One yellow in 2 minutes = 300 per 10 hours, which is red.
-        Assert.Equal(300, s.Score!.Value, 3);
-        Assert.Equal(AlertLevel.Red, TripSummary.Band(s.Score.Value));
+        // One yellow in 38 game minutes = 15.8 per 10 hours, which is green (in real minutes it would be 300, red).
+        Assert.Equal(10 / (38.0 / 60), s.Score!.Value, 3);
+        Assert.Null(TripSummary.Band(s.Score.Value));
         Assert.Contains("Braking", s.ToText());
     }
 
     [Fact]
-    public void ScoreWaitsForAMinuteAndRedCountsDouble()
+    public void ScoreWaitsForTenMinutesAndRedCountsDouble()
     {
         var events = new[]
         {
             new TripEvent(DrivingEventKind.Braking, AlertLevel.Red, T0, T0, "Braking", "Braking", "0.50 g", 0.5, 60, 50, false),
             new TripEvent(DrivingEventKind.Cornering, AlertLevel.Yellow, T0, T0, "Cornering", "", "0.30 g", 0.3, 60, 50, false),
         };
-        Assert.Null(new TripSummary(T0, null, TimeSpan.FromSeconds(59), 1, 60, false, true, events).Score);
+        Assert.Null(new TripSummary(T0, null, TimeSpan.FromMinutes(9.9), 1, 60, false, true, events).Score);
         Assert.Equal(3, new TripSummary(T0, null, TimeSpan.FromHours(10), 1, 60, false, true, events).Score!.Value, 6);
         Assert.Null(TripSummary.Band(19.9));
         Assert.Equal(AlertLevel.Yellow, TripSummary.Band(20));

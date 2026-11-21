@@ -14,6 +14,7 @@
 #include "eurotrucks2/scssdk_telemetry_eut2.h"
 #include "common/scssdk_telemetry_truck_common_channels.h"
 #include "common/scssdk_telemetry_common_configs.h"
+#include "common/scssdk_telemetry_common_channels.h"
 #include "common/scssdk_telemetry_common_gameplay_events.h"
 
 // SCSAPI_RESULT / SCSAPI_VOID already carry the calling convention, so spell the pointer types out.
@@ -121,6 +122,7 @@ int main(int argc, char **argv)
     scs_telemetry_configuration_t config{SCS_TELEMETRY_CONFIG_truck, attrs};
     g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &config, nullptr);
     send_float(SCS_TELEMETRY_TRUCK_CHANNEL_speed, 25.0f);
+    send_float(SCS_TELEMETRY_CHANNEL_local_scale, 19.0f);
     send_float(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, 80.0f / 3.6f);
     // Braking at 0.4 g (vehicle space: +z is backwards) while accelerating 0.2 g towards the right.
     send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, 0.2f * 9.80665f, 0.0f, 0.4f * 9.80665f);
@@ -132,7 +134,7 @@ int main(int argc, char **argv)
     const float *f = reinterpret_cast<const float *>(raw);
     printf("magic=%08X version=%u sequence=%u paused=%u speed=%.2f limit=%.2f fwd=%.3fg right=%.3fg mouse=%u truck=%s\n",
            raw[0], raw[1], raw[2], raw[3], f[4], f[5], f[6], f[7], raw[8], reinterpret_cast<const char *>(raw + 12));
-    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 4 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
+    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 5 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
               && f[5] > 22.2f && f[5] < 22.3f
               // smoothed towards -0.4 g forward and 0.2 g right: two frames of at most 0.2 s each count: about three quarters of the way
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0
@@ -176,6 +178,10 @@ int main(int argc, char **argv)
     g_events[SCS_TELEMETRY_EVENT_gameplay](SCS_TELEMETRY_EVENT_gameplay, &event, nullptr);
     printf("gameplay: count=%u [%s]\n", *gameplay_count, gameplay);
     ok = ok && *gameplay_count == 1 && strcmp(gameplay, "bus_job.delivered\nrevenue=1234\n") == 0;
+
+    const float *local_scale = reinterpret_cast<const float *>(reinterpret_cast<const char *>(raw) + 3196);
+    printf("local scale=%.1f\n", *local_scale);
+    ok = ok && *local_scale == 19.0f;
 
     // The job ends: an empty configuration.
     scs_named_value_t none[1] = {};

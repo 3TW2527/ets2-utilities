@@ -48,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 4
+    uint32_t version;         // layout version, 5
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -65,12 +65,13 @@ struct Ets2uTelemetry
     char job_info[1024];      // the job's attributes, one "name=value" per line ("name[i]=" for arrays)
     uint32_t gameplay_count;  // gameplay events so far; the latest is in gameplay[(count - 1) % 4]
     char gameplay[4][512];    // "id" on the first line, then the event's attributes as in job_info
+    float local_scale;        // local.scale: game seconds per real second (ETS2 ~19 on roads, less in towns); 0 = not sent
 };
 #pragma pack(pop)
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 4;
+static const uint32_t kVersion = 5;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -317,6 +318,10 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     // sees a job start and end through its configuration.
     p->register_for_event(SCS_TELEMETRY_EVENT_gameplay, on_gameplay, nullptr);
 
+    // The map is smaller than the world it stands for, and its clock faster: the app measures driving
+    // time and distance in the game's terms with this, as the game's own job figures are.
+    p->register_for_channel(SCS_TELEMETRY_CHANNEL_local_scale, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->local_scale);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_ms);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, SCS_U32_NIL, SCS_VALUE_TYPE_float,

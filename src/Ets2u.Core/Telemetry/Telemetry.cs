@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 4;
+    public const uint ExpectedVersion = 5;
 
     public uint Magic;
     public uint Version;
@@ -37,6 +37,14 @@ public struct TelemetryFrame
     /// <summary>Gameplay events so far (job delivered, cancelled...); the latest is in slot (count - 1) % 4.</summary>
     public uint GameplayCount;
     public GameplayBytes GameplayRaw;
+    /// <summary>
+    /// Game seconds per real second (the map is smaller than the world it stands for, and its clock
+    /// faster); 0 when the game doesn't send it. See <see cref="Scale"/>.
+    /// </summary>
+    public float LocalScale;
+
+    /// <summary>The time scale to use: 1 when the game didn't send one.</summary>
+    public readonly double Scale => LocalScale > 0 && float.IsFinite(LocalScale) ? LocalScale : 1;
 
     public readonly string TruckId
     {

@@ -17,7 +17,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left), both or neither | Telemetry plugin + on-screen overlay |
-| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time, distance, top speed, counts per category and a safety score (events per 10 hours, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
+| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time and distance in game time (with the real ones beside them), top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
 | **Tools** · Backups | Undo any change the app made (except the livery pack and optional copies, which are rebuilt from their sources) | Copies taken before every write |
@@ -68,7 +68,24 @@ game sends them. Pick a job under **Show**; **Copy summary** and **Forget this j
 - The app and the plugin must be running for the whole job: a job is only seen while the app is open.
   Closing the game mid-job and coming back to it carries on the same summary as long as the app stayed open.
 - Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` (newest 200).
-- This needs plugin version 4 (this release): install the plugin again from the app.
+- This needs plugin version 5 (0.12.1): install the plugin again from the app.
+
+## Safety score
+
+The trip and job summaries score the driving the way GreenRoad does: harsh events per 10 hours of driving,
+a red one counting as two yellows.
+
+    score = (yellow + 2 x red) / hours driven x 10
+
+Green is under 20, yellow under 40, red from 40. The hours (and the distance) are the game's, not the real
+ones: ETS2's map is smaller than the world it stands for and its clock runs faster, by the game's time
+scale (the SDK's `local.scale`, about 19 on roads and less in towns). A route packs the corners, junctions
+and stops of a real 1½-hour run into a few real minutes, so counting real minutes would make every drive
+look 15 to 20 times worse than the same driving on a real road. In game time the summary's driving time
+and distance match the game's own job figures. The events themselves are measured live, in real g and real
+km/h, as a box in a real cab would. The score shows from 10 game minutes of driving.
+
+Jobs saved by 0.12.0 counted real time; the app converts them using the job's own distance from the game.
 
 ## Traffic light
 
