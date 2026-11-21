@@ -46,6 +46,15 @@ public sealed class AppSettings
     public Telemetry.DrivingThresholds TruckThresholds { get; set; } = Telemetry.DrivingThresholds.Truck;
     public bool SpeedingAlerts { get; set; } = true;
 
+    /// <summary>How the alerts show: cards at the top of the screen, a traffic light, both or neither.</summary>
+    public bool AlertCards { get; set; } = true;
+    public bool TrafficLight { get; set; }
+    public OverlayCorner TrafficLightCorner { get; set; } = OverlayCorner.TopCenter;
+    public double TrafficLightScale { get; set; } = 1;
+
+    /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
+    public bool RecordCoachJobs { get; set; } = true;
+
     /// <summary>The floating live g-force meter, and where it was dragged to (null = the default place).</summary>
     public bool GForceMeter { get; set; }
     public double? GForceMeterLeft { get; set; }
@@ -60,6 +69,9 @@ public sealed class AppSettings
     /// <summary>Factors that no longer lower coach passenger satisfaction.</summary>
     public Features.CoachFactor CoachIgnored { get; set; }
     public bool CoachFullSatisfaction { get; set; }
+
+    /// <summary>Hides the g-force meter the game shows on the route advisor in a coach.</summary>
+    public bool CoachHideGMeter { get; set; }
 
     /// <summary>When passengers notice g-forces; null = the game's own limits.</summary>
     public Features.CoachGLimits? CoachLimits { get; set; }

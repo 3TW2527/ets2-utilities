@@ -10,14 +10,14 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Overview** · Game & profiles | Where the game, mods and profiles are | |
 | **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
 | **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
-| **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
+| **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100%; can hide the game's g-force meter on the route advisor | Generated mod `ets2u_coach_<tag>.scs` |
 | **Mods** · Route advisor | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
-| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction | Telemetry plugin + on-screen overlay |
-| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time, distance, top speed, counts per category and a safety score (events per 10 hours, red counting double; green under 20, yellow under 40); copy as text | Telemetry plugin, uses the Driving alerts thresholds |
+| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left), both or neither | Telemetry plugin + on-screen overlay |
+| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time, distance, top speed, counts per category and a safety score (events per 10 hours, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
 | **Tools** · Backups | Undo any change the app made (except the livery pack and optional copies, which are rebuilt from their sources) | Copies taken before every write |
@@ -46,6 +46,41 @@ The plugin works out cornering g itself: the SDK's `truck.local.acceleration.lin
 from the truck changes, which stays near zero through a steady corner, so the plugin adds the turning part
 (angular velocity x velocity, i.e. speed x yaw rate), as an accelerometer in the cab would feel it. It's part of the Coach comfort mod, because both change the same
 file; turn off other mods that change `bus_economy_data.sii`, or only one of them wins.
+
+## Coach job summaries
+
+With **Also keep a summary of every coach job** on (Trip summary page, on by default), the app keeps a trip
+summary for each job without any buttons: the same events, totals and score as a captured trip, plus how
+the job ended (delivered, with revenue and XP, or cancelled, with the penalty) and the job's details as the
+game sends them. Pick a job under **Show**; **Copy summary** and **Forget this job** work on it.
+
+- The plugin passes on the game's `job` and `bus_job` configurations and its gameplay events
+  (`*.delivered`, `*.cancelled`) as plain `name=value` text. The SCS SDK doesn't document the bus job's
+  attributes, so the app keeps whatever the game sends and shows it under the summary; the route
+  ("A → B") is read from the source and destination ones it finds.
+- A job starts when its configuration appears and ends when it clears (or the next job starts after a
+  delivered or cancelled event). Bus jobs are kept, and any job driven only in a coach; truck jobs aren't.
+  A job that was never driven (a profile loaded and left) isn't kept.
+- The app and the plugin must be running for the whole job: a job is only seen while the app is open.
+  Closing the game mid-job and coming back to it carries on the same summary as long as the app stayed open.
+- Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` (newest 200).
+- This needs plugin version 4 (this release): install the plugin again from the app.
+
+## Traffic light
+
+The Driving alerts page can show the alerts as cards, as a traffic light, as both or as neither. The light
+is three lamps in a row, green on the left: green while the driving is smooth, yellow or red while an event
+of that level is on and for the same 4 seconds after it as a card. It's click-through, hidden while the game
+is paused and in a vehicle whose alerts are off. Pick its corner and size on the same page.
+
+## Hiding the game's g-force meter
+
+The coaches' g-force meter is part of the route advisor's centre block (`ui/adviser_center.sii`, and
+`ui/adviser_gps_oculus.sii` in VR): a dial picture and a needle drawn through the text template
+`txt.hud.bus_gmeter.pointer` (`ui/template/text.mod_bus.sii`). With **Hide the game's g-force meter** ticked
+(Coach passengers page), the Coach comfort mod ships those files with the dial, its VR background and the
+needle's picture emptied; nothing else in them changes, and the satisfaction icon stays. Passengers still feel
+the g-forces as before. Another mod that replaces the same files can't be used alongside it.
 
 ## Destination display
 
@@ -170,7 +205,7 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Map position | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
-| Speed overlay, driving alerts, mouse driving | Run on your PC only |
+| Speed overlay, driving alerts, traffic light, trip and job summaries, mouse driving | Run on your PC only |
 
 Don't use any of this on TruckersMP, which has its own rules and anti-cheat.
 
@@ -249,6 +284,7 @@ dotnet test
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
 | Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
 | Saved destination display texts | `%APPDATA%\ets2u\destination_texts.txt` |
+| Coach job summaries | `%APPDATA%\ets2u\coach_jobs.json` |
 | Workshop items downloaded by the app | `%LOCALAPPDATA%\ets2u\workshop\<id>\` |
 | DepotDownloader (when the app installed it) | `%LOCALAPPDATA%\ets2u\DepotDownloader\` |
 

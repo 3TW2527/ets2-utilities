@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 3;
+    public const uint ExpectedVersion = 4;
 
     public uint Magic;
     public uint Version;
@@ -29,6 +29,14 @@ public struct TelemetryFrame
     public float MouseBrake;
     /// <summary>The truck config's id, e.g. "vehicle.man.lions_24"; empty before a truck is loaded.</summary>
     public TruckIdBytes TruckIdRaw;
+    /// <summary>Odd while the plugin is writing the job; read <see cref="JobInfo"/> only when it's even.</summary>
+    public uint JobSeq;
+    /// <summary>0 no job, 1 a truck job, 2 a bus job.</summary>
+    public uint JobKind;
+    public JobInfoBytes JobInfoRaw;
+    /// <summary>Gameplay events so far (job delivered, cancelled...); the latest is in slot (count - 1) % 4.</summary>
+    public uint GameplayCount;
+    public GameplayBytes GameplayRaw;
 
     public readonly string TruckId
     {
@@ -41,12 +49,49 @@ public struct TelemetryFrame
     }
 
     public readonly bool Valid => Magic == ExpectedMagic && Version == ExpectedVersion;
+
+    /// <summary>The job's attributes as "name=value" lines.</summary>
+    public readonly string JobInfo
+    {
+        get
+        {
+            ReadOnlySpan<byte> bytes = JobInfoRaw;
+            return Text(bytes);
+        }
+    }
+
+    /// <summary>A gameplay event: its id on the first line, then its attributes as "name=value" lines.</summary>
+    public readonly string Gameplay(uint slot)
+    {
+        ReadOnlySpan<byte> all = GameplayRaw;
+        return Text(all.Slice((int)(slot % GameplaySlots) * GameplaySlotSize, GameplaySlotSize));
+    }
+
+    public const int GameplaySlots = 4, GameplaySlotSize = 512;
+
+    static string Text(ReadOnlySpan<byte> bytes)
+    {
+        var end = bytes.IndexOf((byte)0);
+        return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
+    }
 }
 
 public enum MouseDriveState : uint { Off, Steering, Held, NoFeed }
 
 [System.Runtime.CompilerServices.InlineArray(64)]
 public struct TruckIdBytes
+{
+    byte _first;
+}
+
+[System.Runtime.CompilerServices.InlineArray(1024)]
+public struct JobInfoBytes
+{
+    byte _first;
+}
+
+[System.Runtime.CompilerServices.InlineArray(TelemetryFrame.GameplaySlots * TelemetryFrame.GameplaySlotSize)]
+public struct GameplayBytes
 {
     byte _first;
 }
@@ -101,10 +146,17 @@ public sealed class LiveTelemetry : IDisposable
     uint _lastSequence;
     DateTime _lastChange = DateTime.MinValue;
 
+    /// <summary>
+    /// The plugin's last frame even while the game is paused (a job is delivered on a menu screen), or
+    /// null when the game or the plugin isn't running.
+    /// </summary>
+    public TelemetryFrame? Raw { get; private set; }
+
     /// <summary>The frame, or null when the game isn't running, is paused, or the plugin is missing or older.</summary>
     public TelemetryFrame? Read()
     {
         var frame = _reader.Read();
+        Raw = frame;
         if (frame is not { } f)
         {
             _reader.Reset();

@@ -14,6 +14,7 @@
 #include "eurotrucks2/scssdk_telemetry_eut2.h"
 #include "common/scssdk_telemetry_truck_common_channels.h"
 #include "common/scssdk_telemetry_common_configs.h"
+#include "common/scssdk_telemetry_common_gameplay_events.h"
 
 // SCSAPI_RESULT / SCSAPI_VOID already carry the calling convention, so spell the pointer types out.
 typedef scs_result_t (SCSAPIFUNC *scs_telemetry_init_t)(const scs_u32_t, const scs_telemetry_init_params_t *const);
@@ -66,6 +67,8 @@ static void send_float(const char *channel, float v)
 
 int main(int argc, char **argv)
 {
+    // Its own shared memory, so the test never touches a running game's plugin.
+    SetEnvironmentVariableW(L"ETS2U_MAP_NAME", L"Local\\Ets2uTelemetryTest");
     HMODULE dll = LoadLibraryA(argc > 1 ? argv[1] : "ets2u_telemetry.dll");
     if (!dll) { printf("FAIL: LoadLibrary\n"); return 1; }
     auto init = reinterpret_cast<scs_telemetry_init_t>(GetProcAddress(dll, "scs_telemetry_init"));
@@ -123,13 +126,13 @@ int main(int argc, char **argv)
     send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, 0.2f * 9.80665f, 0.0f, 0.4f * 9.80665f);
     for (int i = 0; i < 3; i++) { g_events[SCS_TELEMETRY_EVENT_frame_end](SCS_TELEMETRY_EVENT_frame_end, nullptr, nullptr); Sleep(400); }
 
-    HANDLE map = OpenFileMappingW(FILE_MAP_READ, FALSE, L"Local\\Ets2uTelemetry");
+    HANDLE map = OpenFileMappingW(FILE_MAP_READ, FALSE, L"Local\\Ets2uTelemetryTest");
     if (!map) { printf("FAIL: shared memory not found\n"); return 1; }
-    const uint32_t *raw = static_cast<const uint32_t *>(MapViewOfFile(map, FILE_MAP_READ, 0, 0, 112));
+    const uint32_t *raw = static_cast<const uint32_t *>(MapViewOfFile(map, FILE_MAP_READ, 0, 0, 0));
     const float *f = reinterpret_cast<const float *>(raw);
     printf("magic=%08X version=%u sequence=%u paused=%u speed=%.2f limit=%.2f fwd=%.3fg right=%.3fg mouse=%u truck=%s\n",
            raw[0], raw[1], raw[2], raw[3], f[4], f[5], f[6], f[7], raw[8], reinterpret_cast<const char *>(raw + 12));
-    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 3 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
+    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 4 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
               && f[5] > 22.2f && f[5] < 22.3f
               // smoothed towards -0.4 g forward and 0.2 g right: two frames of at most 0.2 s each count: about three quarters of the way
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0
@@ -145,6 +148,41 @@ int main(int argc, char **argv)
     printf("turning: fwd=%.3fg right=%.3fg\n", f[6], f[7]);
     // Six frames of 0.2 s smoothed over 0.3 s: within 2%% of the steady value.
     ok = ok && f[7] < -0.60f && f[7] > -0.66f && f[6] > -0.03f && f[6] < 0.03f;
+
+    // A bus job starts: its attributes come through as text, whatever they're called.
+    const char *job_info = reinterpret_cast<const char *>(raw) + 120;
+    const uint32_t *job_seq = raw + 28, *job_kind = raw + 29;
+    const uint32_t *gameplay_count = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 1144);
+    const char *gameplay = reinterpret_cast<const char *>(raw) + 1148;
+    scs_named_value_t job[3] = {};
+    job[0].name = "source_city"; job[0].index = SCS_U32_NIL;
+    job[0].value.type = SCS_VALUE_TYPE_string; job[0].value.value_string.value = "Praha";
+    job[1].name = "stops"; job[1].index = 2;
+    job[1].value.type = SCS_VALUE_TYPE_u32; job[1].value.value_u32.value = 7;
+    scs_telemetry_configuration_t bus{SCS_TELEMETRY_CONFIG_bus_job, job};
+    g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &bus, nullptr);
+    printf("job: seq=%u kind=%u info=[%s]\n", *job_seq, *job_kind, job_info);
+    ok = ok && *job_seq == 2 && *job_kind == 2 && strcmp(job_info, "source_city=Praha\nstops[2]=7\n") == 0;
+    // The same configuration again changes nothing.
+    g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &bus, nullptr);
+    ok = ok && *job_seq == 2;
+
+    // Delivered: a gameplay event with its attributes.
+    scs_named_value_t delivered[2] = {};
+    delivered[0].name = "revenue"; delivered[0].index = SCS_U32_NIL;
+    delivered[0].value.type = SCS_VALUE_TYPE_s64; delivered[0].value.value_s64.value = 1234;
+    scs_telemetry_gameplay_event_t event{"bus_job.delivered", delivered};
+    if (!g_events[SCS_TELEMETRY_EVENT_gameplay]) { printf("FAIL: no gameplay event callback\n"); return 1; }
+    g_events[SCS_TELEMETRY_EVENT_gameplay](SCS_TELEMETRY_EVENT_gameplay, &event, nullptr);
+    printf("gameplay: count=%u [%s]\n", *gameplay_count, gameplay);
+    ok = ok && *gameplay_count == 1 && strcmp(gameplay, "bus_job.delivered\nrevenue=1234\n") == 0;
+
+    // The job ends: an empty configuration.
+    scs_named_value_t none[1] = {};
+    scs_telemetry_configuration_t ended{SCS_TELEMETRY_CONFIG_bus_job, none};
+    g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &ended, nullptr);
+    printf("job ended: seq=%u kind=%u\n", *job_seq, *job_kind);
+    ok = ok && *job_seq == 4 && *job_kind == 0 && job_info[0] == 0;
 
     g_events[SCS_TELEMETRY_EVENT_paused](SCS_TELEMETRY_EVENT_paused, nullptr, nullptr);
     ok = ok && raw[3] == 1;

@@ -84,6 +84,12 @@ public class SpeedTextTests
     public void FormatsLimit() => Assert.Equal("Limit 80 km/h · 50 mph", SpeedText.FormatLimit(80 / 3.6f));
 
     [Fact]
-    public void FrameLayoutMatchesPlugin() =>
-        Assert.Equal(112, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+    public void FrameLayoutMatchesPlugin()
+    {
+        // Where the plugin's fields start (see plugin/ets2u_telemetry.cpp and plugin/test_host.cpp).
+        Assert.Equal(112, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobSeq)));
+        Assert.Equal(120, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobInfoRaw)));
+        Assert.Equal(1144, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameplayCount)));
+        Assert.Equal(3196, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+    }
 }

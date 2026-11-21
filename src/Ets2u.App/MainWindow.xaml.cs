@@ -38,6 +38,8 @@ public partial class MainWindow : Window
         Loaded += (_, _) =>
         {
             InitPages();
+            // Coach jobs are summarised in the background, so the reader starts with the app.
+            if (_app.Settings.RecordCoachJobs) _ = Hub;
             RefreshAll();
             UpdateOverlay();
             // MOUSE DRIVING DISABLED:
@@ -59,6 +61,7 @@ public partial class MainWindow : Window
             DepotDownloaderTool.StopRunning();
             _overlay?.Close();
             _alerts?.Close();
+            _light?.Close();
             _gMeter?.Close();
             _hub?.Dispose();
             // _mouseIndicator?.Close();
@@ -166,6 +169,7 @@ public partial class MainWindow : Window
             box.IsChecked = s.CoachIgnored.HasFlag(Enum.Parse<CoachFactor>((string)box.Tag));
         CoachJobFailureBox.IsChecked = s.CoachIgnored.HasFlag(CoachFactor.JobFailure);
         CoachFullBox.IsChecked = s.CoachFullSatisfaction;
+        CoachHideGMeterBox.IsChecked = s.CoachHideGMeter;
         RefreshCoachLimits();
         NoDamageStatus.Text = DescribeMod(NoDamage.Mod);
         EarningsStatus.Text = DescribeMod(Earnings.Mod);
@@ -215,6 +219,7 @@ public partial class MainWindow : Window
         if (CoachJobFailureBox.IsChecked == true) ignored |= CoachFactor.JobFailure;
         s.CoachIgnored = ignored;
         s.CoachFullSatisfaction = CoachFullBox.IsChecked == true;
+        s.CoachHideGMeter = CoachHideGMeterBox.IsChecked == true;
         s.CoachLimits = limits.IsStock ? null : limits;
         var result = _app.ApplyMods();
         UpdateOverlay();
@@ -473,7 +478,7 @@ public partial class MainWindow : Window
             _overlay = null;
         }
 
-        if (s.CoachAlerts || s.TruckAlerts)
+        if ((s.CoachAlerts || s.TruckAlerts) && s.AlertCards)
         {
             _alerts ??= new DrivingAlertsOverlay(s, Hub);
             _alerts.Apply(s);
@@ -482,6 +487,17 @@ public partial class MainWindow : Window
         {
             _alerts?.Close();
             _alerts = null;
+        }
+
+        if ((s.CoachAlerts || s.TruckAlerts) && s.TrafficLight)
+        {
+            _light ??= new TrafficLightOverlay(s, Hub);
+            _light.Apply(s);
+        }
+        else
+        {
+            _light?.Close();
+            _light = null;
         }
 
         if (s.GForceMeter)
@@ -510,11 +526,23 @@ public partial class MainWindow : Window
     // ---------- Driving ----------
 
     DrivingAlertsOverlay? _alerts;
+    TrafficLightOverlay? _light;
     GForceMeter? _gMeter;
     TelemetryHub? _hub;
 
     /// <summary>One reader of the plugin for every overlay, started when the first one opens.</summary>
-    TelemetryHub Hub => _hub ??= new TelemetryHub(_app.Settings, _app.Paths.InstallDir);
+    TelemetryHub Hub
+    {
+        get
+        {
+            if (_hub is null)
+            {
+                _hub = new TelemetryHub(_app.Settings, _app.Paths.InstallDir);
+                _hub.JobFinished += OnJobFinished;
+            }
+            return _hub;
+        }
+    }
 
     void GMeter_Click(object sender, RoutedEventArgs e)
     {
@@ -565,6 +593,13 @@ public partial class MainWindow : Window
         ShowThresholds(s.CoachThresholds, s.TruckThresholds);
         ShowAlertSources();
         SpeedingBox.IsChecked = s.SpeedingAlerts;
+        AlertCardsBox.IsChecked = s.AlertCards;
+        TrafficLightBox.IsChecked = s.TrafficLight;
+        TrafficLightCornerBox.ItemsSource = CornerNames;
+        TrafficLightCornerBox.DisplayMemberPath = "Value";
+        TrafficLightCornerBox.SelectedValuePath = "Key";
+        TrafficLightCornerBox.SelectedValue = s.TrafficLightCorner;
+        TrafficLightScaleSlider.Value = s.TrafficLightScale;
         AlertsStatus.Text = DescribeAlerts(s);
     }
 
@@ -641,6 +676,10 @@ public partial class MainWindow : Window
         s.CoachAlerts = CoachAlertsBox.IsChecked == true;
         s.TruckAlerts = TruckAlertsBox.IsChecked == true;
         s.SpeedingAlerts = SpeedingBox.IsChecked == true;
+        s.AlertCards = AlertCardsBox.IsChecked == true;
+        s.TrafficLight = TrafficLightBox.IsChecked == true;
+        s.TrafficLightCorner = TrafficLightCornerBox.SelectedValue is OverlayCorner corner ? corner : OverlayCorner.TopCenter;
+        s.TrafficLightScale = Math.Round(TrafficLightScaleSlider.Value, 1);
         s.Save();
         UpdateOverlay();
         return DescribeAlerts(s);

@@ -288,3 +288,19 @@ public sealed class DrivingEventDetector
         _active.Clear();
     }
 }
+
+/// <summary>The traffic light's state for the alerts on screen.</summary>
+public static class AlertLight
+{
+    /// <summary>The worst level among the alerts, or null (green) when there are none.</summary>
+    public static AlertLevel? For(IEnumerable<AlertLevel> alerts)
+    {
+        AlertLevel? light = null;
+        foreach (var level in alerts)
+        {
+            if (level == AlertLevel.Red) return AlertLevel.Red;
+            light = AlertLevel.Yellow;
+        }
+        return light;
+    }
+}

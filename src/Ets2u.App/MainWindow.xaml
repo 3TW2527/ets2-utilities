@@ -286,8 +286,10 @@
                         </StackPanel>
                         <CheckBox x:Name="CoachJobFailureBox" Content="Extreme g-force no longer fails the job" Margin="0,10,0,0"/>
                         <CheckBox x:Name="CoachFullBox" Content="Passengers board fully satisfied" Margin="0,6,0,0"/>
+                        <CheckBox x:Name="CoachHideGMeterBox" Content="Hide the game's g-force meter on the route advisor" Margin="0,6,0,0"
+                                  ToolTip="Only hides the dial and its needle: passengers still feel the g-forces as set above. The plugin's own live g-force meter (Driving alerts page) is separate."/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The g-force meter on the HUD still moves either way. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
+                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. Hiding the g-force meter only changes the HUD; it also replaces the game's ui/adviser_center.sii and ui/template/text.mod_bus.sii, so another mod that changes those (a route advisor mod) can't be used with it. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyCoach_Click" HorizontalAlignment="Left"/>
@@ -695,6 +697,29 @@
                             <CheckBox x:Name="CoachAlertsBox" Content="In coaches" Margin="0,0,24,0"/>
                             <CheckBox x:Name="TruckAlertsBox" Content="In trucks"/>
                         </StackPanel>
+                        <TextBlock Text="Show them as:" Margin="0,8,0,2"/>
+                        <CheckBox x:Name="AlertCardsBox" Margin="20,2,0,0"
+                                  Content="Cards at the top of the screen, with what happened and the peak g-force"/>
+                        <CheckBox x:Name="TrafficLightBox" Margin="20,4,0,0"
+                                  Content="A traffic light: green, yellow and red lamps in a row, green while you drive smoothly"/>
+                        <Grid Margin="40,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Where" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="TrafficLightCornerBox" Grid.Column="1" Margin="0,3"/>
+                            <TextBlock Grid.Column="2" Text="Size" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            <Slider x:Name="TrafficLightScaleSlider" Grid.Column="3" Minimum="0.6" Maximum="3" Margin="0,4"
+                                    TickFrequency="0.1" IsSnapToTickEnabled="True"/>
+                            <TextBlock Grid.Column="4" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Text="{Binding Value, ElementName=TrafficLightScaleSlider, StringFormat=x{0:0.0}}"/>
+                        </Grid>
+                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
+                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). The light stays yellow or red as long as a card would, and is hidden while the game is paused."/>
                         <CheckBox x:Name="GMeterBox" Margin="0,10,0,0" Click="GMeter_Click" FontWeight="SemiBold"
                                   Content="Show the live g-force meter (now and peak in each direction, coloured by these thresholds)"/>
                         <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
@@ -783,12 +808,22 @@
                         <TextBlock Style="{StaticResource Note}"
                                    Text="Press Start capturing before you set off and Stop capturing when you arrive. While it captures, every harsh acceleration, braking, cornering and speeding event is listed here with its time, using the thresholds on the Driving alerts page for the vehicle you&apos;re in, whether the alert cards are on or off (speeding always counts). Click an event for its details. Keep this app open while you drive; the trip is kept until you start the next one or close the app."/>
                         <TextBlock x:Name="TripPluginStatus" Style="{StaticResource Status}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <CheckBox x:Name="RecordJobsBox" Margin="0,6,0,0" Click="RecordJobs_Click" FontWeight="SemiBold"
+                                  Content="Also keep a summary of every coach job, from when you take it to when it's delivered or cancelled"/>
+                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
+                                   Text="Automatic: no buttons to press. Needs the plugin and this app open for the whole job. The last 200 jobs are kept; pick one under Show."/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="Show" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="TripSourceBox" Width="520" SelectionChanged="TripSource_Changed"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <Button x:Name="StartTripButton" Content="Start capturing" Click="StartTrip_Click" FontWeight="SemiBold"/>
                             <Button x:Name="StopTripButton" Content="Stop capturing" Click="StopTrip_Click"/>
                             <Button x:Name="CopyTripButton" Content="Copy summary" Click="CopyTrip_Click"/>
+                            <Button x:Name="ForgetJobButton" Content="Forget this job" Click="ForgetJob_Click"/>
                         </StackPanel>
                         <TextBlock x:Name="TripStatus" Style="{StaticResource Status}" Margin="0,6,0,0"/>
+                        <TextBlock x:Name="TripJobDetails" Style="{StaticResource Note}" Visibility="Collapsed"/>
 
                         <Border x:Name="TripTotals" Background="White" BorderBrush="#D8E0EA" BorderThickness="1" CornerRadius="4"
                                 Padding="16,12" Margin="0,10,0,0">

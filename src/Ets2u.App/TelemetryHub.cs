@@ -31,6 +31,12 @@ public sealed class TelemetryHub : IDisposable
 
     /// <summary>The trip being captured for the Trip summary page (started and stopped by a button).</summary>
     public TripRecorder Trip { get; } = new();
+
+    /// <summary>Splits the driving into jobs, each with its own trip summary.</summary>
+    public JobTracker Jobs { get; } = new();
+
+    /// <summary>A coach job just ended (raised on the reader thread).</summary>
+    public event Action<JobSummary>? JobFinished;
     readonly Thread _thread;
     readonly object _lock = new();
     volatile bool _stop;
@@ -89,17 +95,19 @@ public sealed class TelemetryHub : IDisposable
             {
                 frame = null;
             }
-            Step(frame, DateTime.UtcNow);
+            Step(frame, _telemetry.Raw, DateTime.UtcNow);
             var wait = (frame is null ? IdlePeriod : LivePeriod) - (clock.Elapsed - started);
             if (wait > TimeSpan.Zero) Thread.Sleep(wait);
         }
     }
 
-    void Step(TelemetryFrame? frame, DateTime now)
+    void Step(TelemetryFrame? frame, TelemetryFrame? raw, DateTime now)
     {
         var coach = frame is { } v && _vehicles.IsCoach(v.TruckId);
         var alerts = coach ? _settings.CoachAlerts : _settings.TruckAlerts;
-        var capturing = Trip.Capturing;
+        var recordJobs = _settings.RecordCoachJobs;
+        // A job's summary counts events like a trip does, alerts or not.
+        var capturing = Trip.Capturing || (recordJobs && Jobs.Active);
         IReadOnlyList<DrivingEvent> news = [];
         if (frame is { } f && (alerts || capturing))
         {
@@ -116,6 +124,11 @@ public sealed class TelemetryHub : IDisposable
             _detector.Reset(now);
         }
         Trip.Step(now, frame?.SpeedMs, coach, news);
+        if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news) is { } finished)
+        {
+            try { JobFinished?.Invoke(finished); }
+            catch (Exception ex) { AppDirs.Log("Job summary: " + ex); }
+        }
         _events.RemoveAll(e => e.Ended is { } end && now - end > Linger);
         var cards = _events.Count == 0
             ? []

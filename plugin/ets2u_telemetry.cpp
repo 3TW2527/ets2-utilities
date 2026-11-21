@@ -1,7 +1,10 @@
 // ETS2 Utilities plugin.
 //
 // Telemetry: publishes the truck's speed, the navigation speed limit and its g-forces to shared
-// memory (Local\Ets2uTelemetry) for the app's overlays (both speed units, driving alerts).
+// memory (Local\Ets2uTelemetry) for the app's overlays (both speed units, driving alerts), and the
+// current job (truck or bus) and the last gameplay events (delivered, cancelled, ...) for the app's
+// per-job summaries. Jobs and events are passed on as plain "name=value" text, whatever attributes the
+// game sends: the SDK doesn't document the bus job's.
 //
 // Input: an optional OMSI-style mouse driving device. While it's on, the mouse's place across the
 // game window is the steering and its place above or below the middle is the throttle or the
@@ -20,6 +23,7 @@
 #include <dinput.h>
 
 #include <cmath>
+#include <cstdarg>
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
@@ -36,6 +40,7 @@
 #include "amtrucks/scssdk_input_ats.h"
 #include "common/scssdk_telemetry_common_channels.h"
 #include "common/scssdk_telemetry_common_configs.h"
+#include "common/scssdk_telemetry_common_gameplay_events.h"
 #include "common/scssdk_telemetry_truck_common_channels.h"
 
 // Must match Ets2u.Core/Telemetry/Telemetry.cs.
@@ -43,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 3
+    uint32_t version;         // layout version, 4
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -55,12 +60,17 @@ struct Ets2uTelemetry
     float mouse_throttle;     // 0..1
     float mouse_brake;        // 0..1
     char truck_id[64];        // the truck config's id, e.g. "vehicle.man.lions_24" (a coach), "" when none
+    uint32_t job_seq;         // odd while job_kind / job_info are being written, bumped by 2 per change
+    uint32_t job_kind;        // 0 no job, 1 a truck job ("job" config), 2 a bus job ("bus_job" config)
+    char job_info[1024];      // the job's attributes, one "name=value" per line ("name[i]=" for arrays)
+    uint32_t gameplay_count;  // gameplay events so far; the latest is in gameplay[(count - 1) % 4]
+    char gameplay[4][512];    // "id" on the first line, then the event's attributes as in job_info
 };
 #pragma pack(pop)
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 3;
+static const uint32_t kVersion = 4;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -95,7 +105,11 @@ static float seconds_since(LARGE_INTEGER &last)
 static bool open_memory()
 {
     if (g_shared) return true;
-    g_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Ets2uTelemetry), kMapName);
+    // ETS2U_MAP_NAME lets plugin\test_host.exe use its own memory, so a test never touches a running game's.
+    wchar_t name[128];
+    const DWORD n = GetEnvironmentVariableW(L"ETS2U_MAP_NAME", name, 128);
+    g_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, sizeof(Ets2uTelemetry),
+                                   n > 0 && n < 128 ? name : kMapName);
     if (!g_mapping) return false;
     g_shared = static_cast<Ets2uTelemetry *>(MapViewOfFile(g_mapping, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(Ets2uTelemetry)));
     if (!g_shared)
@@ -154,10 +168,117 @@ static SCSAPI_VOID on_frame_end(const scs_event_t, const void *const, const scs_
 }
 
 // The truck's id (vehicle.<brand>.<model>), so the app can tell a coach from a truck.
+// ---------------------------------------------------------------- jobs and gameplay events
+
+// Appends to a fixed buffer, always 0-terminated; what doesn't fit is dropped.
+struct Text
+{
+    char *at;
+    size_t left;
+    void put(const char *s)
+    {
+        while (*s && left > 1) { *at++ = *s++; left--; }
+        *at = 0;
+    }
+    void putf(const char *format, ...)
+    {
+        if (left <= 1) return;
+        char buffer[256];
+        va_list args;
+        va_start(args, format);
+        vsnprintf(buffer, sizeof(buffer), format, args);
+        va_end(args);
+        put(buffer);
+    }
+};
+
+static void put_value(Text &t, const scs_value_t &v)
+{
+    switch (v.type)
+    {
+    case SCS_VALUE_TYPE_bool: t.put(v.value_bool.value ? "true" : "false"); break;
+    case SCS_VALUE_TYPE_s32: t.putf("%d", v.value_s32.value); break;
+    case SCS_VALUE_TYPE_u32: t.putf("%u", v.value_u32.value); break;
+    case SCS_VALUE_TYPE_u64: t.putf("%llu", static_cast<unsigned long long>(v.value_u64.value)); break;
+    case SCS_VALUE_TYPE_s64: t.putf("%lld", static_cast<long long>(v.value_s64.value)); break;
+    case SCS_VALUE_TYPE_float: t.putf("%g", v.value_float.value); break;
+    case SCS_VALUE_TYPE_double: t.putf("%g", v.value_double.value); break;
+    case SCS_VALUE_TYPE_fvector: t.putf("(%g, %g, %g)", v.value_fvector.x, v.value_fvector.y, v.value_fvector.z); break;
+    case SCS_VALUE_TYPE_dvector: t.putf("(%g, %g, %g)", v.value_dvector.x, v.value_dvector.y, v.value_dvector.z); break;
+    case SCS_VALUE_TYPE_string:
+        // One value per line: a line break inside a name would start a new attribute.
+        for (const char *s = v.value_string.value ? v.value_string.value : ""; *s && t.left > 1; s++)
+        {
+            const char c[2] = {*s == '\n' || *s == '\r' ? ' ' : *s, 0};
+            t.put(c);
+        }
+        break;
+    default: t.put("?"); break;
+    }
+}
+
+static void put_attributes(Text &t, const scs_named_value_t *a)
+{
+    for (; a && a->name; a++)
+    {
+        t.put(a->name);
+        if (a->index != SCS_U32_NIL) t.putf("[%u]", a->index);
+        t.put("=");
+        put_value(t, a->value);
+        t.put("\n");
+    }
+}
+
+// The last "job" and "bus_job" configurations; an empty one means there's no such job.
+static char g_job[1024] = {};
+static char g_bus_job[1024] = {};
+
+static void publish_job()
+{
+    // Seqlock: odd while writing, so the app can tell a half-written job and read it again.
+    InterlockedIncrement(reinterpret_cast<volatile LONG *>(&g_shared->job_seq));
+    MemoryBarrier();
+    const bool bus = g_bus_job[0] != 0;
+    g_shared->job_kind = bus ? 2 : g_job[0] ? 1 : 0;
+    memcpy(g_shared->job_info, bus ? g_bus_job : g_job, sizeof(g_shared->job_info));
+    MemoryBarrier();
+    InterlockedIncrement(reinterpret_cast<volatile LONG *>(&g_shared->job_seq));
+}
+
+static SCSAPI_VOID on_gameplay(const scs_event_t, const void *const event_info, const scs_context_t)
+{
+    const auto *e = static_cast<const scs_telemetry_gameplay_event_t *>(event_info);
+    if (!g_shared || !e || !e->id) return;
+    char *slot = g_shared->gameplay[g_shared->gameplay_count % 4];
+    char text[sizeof(g_shared->gameplay[0])] = {};
+    Text t{text, sizeof(text)};
+    t.put(e->id);
+    t.put("\n");
+    put_attributes(t, e->attributes);
+    memcpy(slot, text, sizeof(text));
+    MemoryBarrier();
+    InterlockedIncrement(reinterpret_cast<volatile LONG *>(&g_shared->gameplay_count));
+}
+
 static SCSAPI_VOID on_configuration(const scs_event_t, const void *const event_info, const scs_context_t)
 {
     const auto *config = static_cast<const scs_telemetry_configuration_t *>(event_info);
-    if (!g_shared || !config || strcmp(config->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
+    if (!g_shared || !config) return;
+    const bool job = strcmp(config->id, SCS_TELEMETRY_CONFIG_job) == 0, bus_job = strcmp(config->id, SCS_TELEMETRY_CONFIG_bus_job) == 0;
+    if (job || bus_job)
+    {
+        char *target = bus_job ? g_bus_job : g_job;
+        char text[sizeof(g_job)] = {};
+        Text t{text, sizeof(text)};
+        put_attributes(t, config->attributes);
+        if (strcmp(text, target) != 0)
+        {
+            memcpy(target, text, sizeof(text));
+            publish_job();
+        }
+        return;
+    }
+    if (strcmp(config->id, SCS_TELEMETRY_CONFIG_truck) != 0) return;
     char id[sizeof(g_shared->truck_id)] = {};
     for (const scs_named_value_t *a = config->attributes; a->name; a++)
         if (strcmp(a->name, SCS_TELEMETRY_CONFIG_ATTRIBUTE_id) == 0 && a->value.type == SCS_VALUE_TYPE_string && a->value.value_string.value)
@@ -192,6 +313,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
         p->register_for_event(SCS_TELEMETRY_EVENT_started, on_pause, nullptr) == SCS_RESULT_ok &&
         p->register_for_event(SCS_TELEMETRY_EVENT_configuration, on_configuration, nullptr) == SCS_RESULT_ok;
     if (!events_ok) return SCS_RESULT_generic_error;
+    // Gameplay events (job delivered, cancelled, ...) came with game 1.35; without them the app still
+    // sees a job start and end through its configuration.
+    p->register_for_event(SCS_TELEMETRY_EVENT_gameplay, on_gameplay, nullptr);
 
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_ms);

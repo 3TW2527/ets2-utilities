@@ -53,7 +53,7 @@ public partial class MainWindow
             ModRowFor(BusDisplay.Mod, "Destination display", BusDisplayTab),
             LiveryPackRow(),
             .. OptionalRows(),
-            new("Telemetry plugin", "Plugin", PluginInstaller.FileName, DescribePlugin() + " Used by: speed overlay, driving alerts.", OverlayTab),
+            new("Telemetry plugin", "Plugin", PluginInstaller.FileName, DescribePlugin() + " Used by: speed overlay, driving alerts, traffic light, trip and coach job summaries.", OverlayTab),
         ];
         ModsGrid.ItemsSource = rows;
     }

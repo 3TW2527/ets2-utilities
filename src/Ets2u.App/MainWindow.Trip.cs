@@ -108,6 +108,90 @@ public partial class MainWindow
     readonly ObservableCollection<TripEventRow> _tripRows = new();
     DispatcherTimer? _tripTimer;
 
+    /// <summary>What the page shows: the trip of Start/Stop, the coach job being driven, or a saved one.</summary>
+    sealed record TripSource(string Label, int Job)
+    {
+        public const int Manual = -2, CurrentJob = -1;
+        public override string ToString() => Label;
+    }
+
+    List<JobSummary>? _jobs;
+    string _sourcesKey = "";
+    bool _settingSources;
+
+    List<JobSummary> Jobs => _jobs ??= JobLog.Load();
+
+    TripSource Selected => TripSourceBox.SelectedItem as TripSource ?? new TripSource("", TripSource.Manual);
+
+    /// <summary>Rebuilds the Show list when the jobs change, keeping what was picked.</summary>
+    void RefreshTripSources()
+    {
+        var current = _hub?.Jobs.Current();
+        var key = $"{Jobs.Count}:{Jobs.FirstOrDefault()?.Started.Ticks}:{current?.Started.Ticks}";
+        if (key == _sourcesKey) return;
+        _sourcesKey = key;
+        var picked = Selected;
+        var c = CultureInfo.InvariantCulture;
+        var items = new List<TripSource> { new("Trip (Start / Stop capturing)", TripSource.Manual) };
+        if (current is not null)
+            items.Add(new($"Coach job in progress, since {current.Started.ToLocalTime():HH:mm}" +
+                          (current.Route.Length > 0 ? " · " + current.Route : ""), TripSource.CurrentJob));
+        items.AddRange(Jobs.Select((j, i) => new TripSource(string.Create(c,
+            $"{j.Started.ToLocalTime():d MMM HH:mm} · {(j.Route.Length > 0 ? j.Route + " · " : "")}{JobText.Describe(j.Outcome, null)}{(j.Trip.Score is { } s ? " · score " + Math.Round(s).ToString(c) : "")}"), i)));
+        _settingSources = true;
+        TripSourceBox.ItemsSource = items;
+        // A job that was in progress and just ended is now the newest saved one.
+        TripSourceBox.SelectedItem = picked.Job == TripSource.CurrentJob && current is null && items.Count > 1
+            ? items.FirstOrDefault(i => i.Job == 0)
+            : items.FirstOrDefault(i => i.Label == picked.Label) ?? items[0];
+        _settingSources = false;
+        _tripRows.Clear();
+    }
+
+    void TripSource_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_loading || _settingSources) return;
+        _tripRows.Clear();
+        ShowTrip();
+    }
+
+    void RecordJobs_Click(object sender, RoutedEventArgs e)
+    {
+        _app.Settings.RecordCoachJobs = RecordJobsBox.IsChecked == true;
+        _app.Settings.Save();
+        if (_app.Settings.RecordCoachJobs) _ = Hub;
+        _app.Status(_app.Settings.RecordCoachJobs ? "Coach jobs will get a summary each." : "Coach jobs aren't summarised any more.");
+    }
+
+    /// <summary>Saves a finished coach job (called on the reader thread).</summary>
+    void OnJobFinished(JobSummary job) => Dispatcher.BeginInvoke(() =>
+    {
+        Jobs.Insert(0, job);
+        try
+        {
+            JobLog.Save(Jobs);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            _app.Status("Couldn't save the coach job's summary: " + ex.Message);
+            return;
+        }
+        _app.Status($"Coach job {JobText.Describe(job.Outcome, job.Result).ToLowerInvariant()}" +
+                    (job.Route.Length > 0 ? $" ({job.Route})" : "") + ". Its summary is on the Trip summary page.");
+        RefreshTripSources();
+        if (TripTab.IsSelected) ShowTrip();
+    });
+
+    void ForgetJob_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected.Job < 0 || Selected.Job >= Jobs.Count) return;
+        Jobs.RemoveAt(Selected.Job);
+        JobLog.Save(Jobs);
+        _sourcesKey = "";
+        RefreshTripSources();
+        ShowTrip();
+    }
+
     void RefreshTrip()
     {
         if (_tripTimer is null)
@@ -123,6 +207,8 @@ public partial class MainWindow
             Closed += (_, _) => _tripTimer.Stop();
         }
         TripPluginStatus.Text = DescribePlugin();
+        RecordJobsBox.IsChecked = _app.Settings.RecordCoachJobs;
+        RefreshTripSources();
         ShowTrip();
     }
 
@@ -145,25 +231,48 @@ public partial class MainWindow
         ShowTrip();
     }
 
+    /// <summary>The job shown, when the page shows one.</summary>
+    JobSummary? ShownJob => Selected.Job switch
+    {
+        TripSource.CurrentJob => _hub?.Jobs.Current(),
+        >= 0 when Selected.Job < Jobs.Count => Jobs[Selected.Job],
+        _ => null,
+    };
+
     void CopyTrip_Click(object sender, RoutedEventArgs e)
     {
-        if (_hub?.Trip.Snapshot() is not { } trip) return;
-        _app.Status(ClipboardText.TrySet(new System.Windows.Interop.WindowInteropHelper(this).Handle, trip.ToText()) ? "Trip summary copied." : "The clipboard is busy; try again.");
+        var text = Selected.Job == TripSource.Manual ? _hub?.Trip.Snapshot()?.ToText() : ShownJob?.ToText();
+        if (text is null) return;
+        _app.Status(ClipboardText.TrySet(new System.Windows.Interop.WindowInteropHelper(this).Handle, text) ? "Summary copied." : "The clipboard is busy; try again.");
     }
 
     void ShowTrip()
     {
-        var trip = _hub?.Trip.Snapshot();
+        RefreshTripSources();
+        var manual = Selected.Job == TripSource.Manual;
+        var job = manual ? null : ShownJob;
+        var trip = manual ? _hub?.Trip.Snapshot() : job?.Trip;
         var now = DateTime.UtcNow;
+        StartTripButton.Visibility = StopTripButton.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        ForgetJobButton.Visibility = Selected.Job >= 0 ? Visibility.Visible : Visibility.Collapsed;
         StartTripButton.IsEnabled = trip is not { Capturing: true };
         StopTripButton.IsEnabled = trip is { Capturing: true };
         CopyTripButton.IsEnabled = trip is not null;
         TripTotals.Visibility = trip is null ? Visibility.Collapsed : Visibility.Visible;
+        TripJobDetails.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
+        if (job is not null)
+        {
+            // The game's own words for the job, whatever its attributes are called.
+            var lines = job.Job.Select(kv => $"{kv.Key}: {kv.Value}").ToList();
+            if (job.ResultEvent is not null)
+                lines.Add($"{job.ResultEvent}: " + string.Join(", ", (job.Result ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key} {kv.Value}")));
+            TripJobDetails.Text = lines.Count == 0 ? "The game sent no details for this job." : string.Join("\n", lines);
+        }
 
         if (trip is null)
         {
-            TripStatus.Text = "No trip captured yet.";
-            TripNoEventsText.Text = "Press Start capturing, then drive.";
+            TripStatus.Text = manual ? "No trip captured yet." : "No coach job in progress.";
+            TripNoEventsText.Text = manual ? "Press Start capturing, then drive." : "";
             TripNoEvents.Visibility = Visibility.Visible;
             _tripRows.Clear();
             return;
@@ -171,7 +280,12 @@ public partial class MainWindow
 
         var c = CultureInfo.InvariantCulture;
         var started = trip.Started.ToLocalTime();
-        TripStatus.Text = trip.Capturing
+        TripStatus.Text = job is not null
+            ? (job.Outcome == JobOutcome.InProgress
+                ? $"Coach job since {started:HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}."
+                : $"Coach job from {started:d MMM HH:mm} to {job.Ended!.Value.ToLocalTime():HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}: " +
+                  JobText.Describe(job.Outcome, job.Result) + ".")
+            : trip.Capturing
             ? (_hub!.Current.Frame is null
                 ? $"Capturing since {started:HH:mm}. Waiting for the game (needs the plugin, and the game unpaused)."
                 : $"Capturing since {started:HH:mm}.")
@@ -227,7 +341,7 @@ public partial class MainWindow
         }
         while (_tripRows.Count > trip.Events.Count) _tripRows.RemoveAt(_tripRows.Count - 1);
 
-        TripNoEventsText.Text = trip.Capturing ? "No safety events yet. Keep it smooth." : "No safety events on this trip.";
+        TripNoEventsText.Text = trip.Capturing ? "No safety events yet. Keep it smooth." : job is not null ? "No safety events on this job." : "No safety events on this trip.";
         TripNoEvents.Visibility = trip.Events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }
