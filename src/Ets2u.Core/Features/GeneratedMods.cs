@@ -29,10 +29,9 @@ public static class GeneratedMods
         if (s.IncomeMultiplier != 1 || s.XpMultiplier != 1 || exists(Earnings.Mod))
             mods[Name(Earnings.Mod)] = Earnings.BuildMod(game.Read(Earnings.GamePath), s.IncomeMultiplier, s.XpMultiplier);
         var limits = CoachLimits(s);
-        if (s.CoachIgnored != CoachFactor.None || s.CoachFullSatisfaction || limits is not null || s.CoachHideGMeter || exists(CoachComfort.Mod))
-            mods[Name(CoachComfort.Mod)] = CoachComfort.BuildMod(game.Read(CoachComfort.GamePath), s.CoachIgnored, s.CoachFullSatisfaction, limits,
-                s.CoachHideGMeter ? CoachComfort.HideGMeter(game) : null);
-        if (s.MapPositionEnabled || exists(HudMod.Mod))
+        if (s.CoachIgnored != CoachFactor.None || s.CoachFullSatisfaction || limits is not null || exists(CoachComfort.Mod))
+            mods[Name(CoachComfort.Mod)] = CoachComfort.BuildMod(game.Read(CoachComfort.GamePath), s.CoachIgnored, s.CoachFullSatisfaction, limits);
+        if (s.MapPositionEnabled || s.HideGMeter || exists(HudMod.Mod))
             mods[Name(HudMod.Mod)] = HudMod.BuildMod(game, s);
         // The display template is in dlc_bus.scs, so this needs the coaches DLC.
         if ((s.BusDisplay.Enabled || exists(BusDisplay.Mod)) && game.TryRead(BusDisplay.GamePath) is { } template)

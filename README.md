@@ -10,8 +10,8 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Overview** · Game & profiles | Where the game, mods and profiles are | |
 | **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
 | **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
-| **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100%; can hide the game's g-force meter on the route advisor | Generated mod `ets2u_coach_<tag>.scs` |
-| **Mods** · Route advisor | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
+| **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
+| **Mods** · HUD | Route advisor map position (trucks and coaches); hide the coaches' g-force meter on the route advisor | Generated mod `ets2u_ui_<tag>.scs` ("ETS2 Utilities: HUD") |
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
@@ -99,9 +99,13 @@ is paused and in a vehicle whose alerts are off. Pick its corner and size on the
 The coaches' g-force meter is part of the route advisor's centre block (`ui/adviser_center.sii`, and
 `ui/adviser_gps_oculus.sii` in VR): a dial picture and a needle drawn through the text template
 `txt.hud.bus_gmeter.pointer` (`ui/template/text.mod_bus.sii`). With **Hide the game's g-force meter** ticked
-(Coach passengers page), the Coach comfort mod ships those files with the dial, its VR background and the
-needle's picture emptied; nothing else in them changes, and the satisfaction icon stays. Passengers still feel
-the g-forces as before. Another mod that replaces the same files can't be used alongside it.
+(HUD page), the HUD mod ships those files with the dial, its VR background and the needle's picture emptied;
+nothing else in them changes, and the satisfaction icon stays. Passengers still feel the g-forces as before.
+Another mod that replaces the same files can't be used alongside it.
+
+0.12.0 and 0.12.1 kept this switch in the Coach comfort mod. From 0.12.2 it's part of the HUD mod (called
+"Route advisor position" until then; its file name, `ets2u_ui_<tag>.scs`, stays the same, so it stays enabled
+where it was). The switch carries over; if the HUD mod isn't enabled in any profile, the app says to enable it.
 
 ## Destination display
 
@@ -223,7 +227,7 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Destination display | Only changes what you see on your own coach |
 | Livery pack | Others see your livery only if they have it too; the pack is optional for them |
 | Make optional | The copy is optional for others; what you change (an engine, tires) applies to your own vehicle |
-| Map position | Only changes your HUD |
+| HUD (map position, g-force meter) | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
 | Speed overlay, driving alerts, traffic light, trip and job summaries, mouse driving | Run on your PC only |

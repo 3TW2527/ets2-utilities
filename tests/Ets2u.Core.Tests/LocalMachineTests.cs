@@ -136,7 +136,7 @@ public class LocalMachineTests(ITestOutputHelper output)
         })!;
         while (process.StandardOutput.ReadLine() is { } line && !line.StartsWith("holding")) { }
 
-        using var reader = new TelemetryReader();
+        using var reader = new TelemetryReader(TelemetryReader.TestMapName);
         var frame = reader.Read();
         Assert.NotNull(frame);
         output.WriteLine($"plugin -> app: {SpeedText.Format(frame.Value.SpeedMs)}; {SpeedText.FormatLimit(frame.Value.SpeedLimitMs)}");

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Ets2u.Core.Extract;
 using Ets2u.Core.Features;
+using Ets2u.Core.Mods;
 using Ets2u.Core.Paths;
 using Ets2u.Core.Sii;
 using Ets2u.Core.Telemetry;
@@ -302,7 +303,7 @@ public class GMeterTests(ITestOutputHelper output)
             ["ui/adviser_center.sii"] = Encoding.UTF8.GetBytes(Center),
             ["ui/template/text.mod_bus.sii"] = Encoding.UTF8.GetBytes(Templates),
         });
-        var files = CoachComfort.HideGMeter(game);
+        var files = HudMod.HideGMeter(game);
         Assert.Equal(["ui/adviser_center.sii", "ui/template/text.mod_bus.sii"], files.Keys.Order());
         var center = SiiDocument.Parse(files["ui/adviser_center.sii"]);
         Assert.Equal("\"\"", center.GetValue(center.Units.First(u => u.Name == "_nameless._.gmeter.range"), "text"));
@@ -315,15 +316,16 @@ public class GMeterTests(ITestOutputHelper output)
 
     [Fact]
     public void FailsWhenTheGameHasNoMeter() =>
-        Assert.Throws<FormatException>(() => CoachComfort.HideGMeter(new InMemoryGameFiles(new Dictionary<string, byte[]>())));
+        Assert.Throws<FormatException>(() => HudMod.HideGMeter(new InMemoryGameFiles(new Dictionary<string, byte[]>())));
 
     [Fact]
-    public void TheCoachModShipsTheHudFilesOnlyWhenAsked()
+    public void TheHudModShipsTheMeterFilesOnlyWhenAsked()
     {
         var stock = Encoding.UTF8.GetBytes("SiiNunit\n{\nbus_economy_data : bus_economy.data\n{\n\tsatisfaction_late_penalty: (0.05, 0.13)\n}\n}\n");
         var game = new InMemoryGameFiles(new Dictionary<string, byte[]>
         {
             [CoachComfort.GamePath] = stock,
+            ["ui/adviser.sii"] = Encoding.UTF8.GetBytes("SiiNunit\n{\n}\n"),
             ["ui/adviser_center.sii"] = Encoding.UTF8.GetBytes(Center),
             ["ui/template/text.mod_bus.sii"] = Encoding.UTF8.GetBytes(Templates),
         });
@@ -332,11 +334,42 @@ public class GMeterTests(ITestOutputHelper output)
             using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
             return archive.Entries.Select(e => e.FullName).ToList();
         }
-        var off = GeneratedMods.Build(game, new AppSettings { CoachHideGMeter = false, ModTag = "abcdef" }, m => m == CoachComfort.Mod);
-        Assert.DoesNotContain("ui/adviser_center.sii", Entries(off["ets2u_coach_abcdef.scs"]));
-        var on = GeneratedMods.Build(game, new AppSettings { CoachHideGMeter = true, ModTag = "abcdef" }, _ => false);
-        Assert.Contains("ui/adviser_center.sii", Entries(on["ets2u_coach_abcdef.scs"]));
-        Assert.Contains("ui/template/text.mod_bus.sii", Entries(on["ets2u_coach_abcdef.scs"]));
+        bool Built(ModSpec m) => m == HudMod.Mod || m == CoachComfort.Mod;
+        var off = GeneratedMods.Build(game, new AppSettings { HideGMeter = false, ModTag = "abcdef" }, Built);
+        Assert.DoesNotContain("ui/adviser_center.sii", Entries(off["ets2u_ui_abcdef.scs"]));
+        var on = GeneratedMods.Build(game, new AppSettings { HideGMeter = true, ModTag = "abcdef" }, Built);
+        Assert.Contains("ui/adviser_center.sii", Entries(on["ets2u_ui_abcdef.scs"]));
+        Assert.Contains("ui/template/text.mod_bus.sii", Entries(on["ets2u_ui_abcdef.scs"]));
+        Assert.Contains("ui/adviser.sii", Entries(on["ets2u_ui_abcdef.scs"]));
+        // The coach mod has only the passengers' file now.
+        Assert.Equal(["def/bus_economy_data.sii", "description.txt", "manifest.sii", "mod_icon.jpg"], Entries(on["ets2u_coach_abcdef.scs"]).Order());
+        // Hiding the meter alone is enough to make the HUD mod.
+        var fresh = GeneratedMods.Build(game, new AppSettings { HideGMeter = true, ModTag = "abcdef" }, _ => false);
+        Assert.Equal(["ets2u_ui_abcdef.scs"], fresh.Keys);
+        Assert.Equal("ETS2 Utilities: HUD", HudMod.Mod.DisplayName);
+        Assert.Equal("ets2u_ui_abcdef.scs", GeneratedMods.ForPlayer(HudMod.Mod, new AppSettings { ModTag = "abcdef" }).FileName);
+    }
+
+    [Fact]
+    public void TheSwitchFromTheCoachModCarriesOver()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ets2u_settings_{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, "{ \"CoachHideGMeter\": true, \"ModTag\": \"abcdef\" }");
+            var s = AppSettings.Load(path);
+            Assert.True(s.HideGMeter);
+            Assert.True(s.GMeterMoved);
+            s.Save(path);
+            Assert.DoesNotContain("CoachHideGMeter", File.ReadAllText(path));
+            var again = AppSettings.Load(path);
+            Assert.True(again.HideGMeter);
+            Assert.False(again.GMeterMoved); // said once
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     /// <summary>The installed game's files (run with ETS2U_LOCAL=1); reads only.</summary>
@@ -346,7 +379,7 @@ public class GMeterTests(ITestOutputHelper output)
         if (Environment.GetEnvironmentVariable("ETS2U_LOCAL") != "1") return;
         var paths = GamePaths.Detect();
         using var game = new GameArchives(paths.InstallDir!);
-        var files = CoachComfort.HideGMeter(game);
+        var files = HudMod.HideGMeter(game);
         foreach (var (path, bytes) in files)
         {
             var before = Encoding.UTF8.GetString(game.Read(path)).Replace("\r\n", "\n").Split('\n');

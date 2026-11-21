@@ -49,7 +49,7 @@ public partial class MainWindow
             ModRowFor(NoDamage.Mod, "No damage", NoDamageTab),
             ModRowFor(Earnings.Mod, "Bigger earnings", EarningsTab),
             ModRowFor(CoachComfort.Mod, "Coach passengers", CoachTab),
-            ModRowFor(HudMod.Mod, "Route advisor", HudTab),
+            ModRowFor(HudMod.Mod, "HUD", HudTab),
             ModRowFor(BusDisplay.Mod, "Destination display", BusDisplayTab),
             LiveryPackRow(),
             .. OptionalRows(),

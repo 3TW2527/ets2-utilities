@@ -169,7 +169,6 @@ public partial class MainWindow : Window
             box.IsChecked = s.CoachIgnored.HasFlag(Enum.Parse<CoachFactor>((string)box.Tag));
         CoachJobFailureBox.IsChecked = s.CoachIgnored.HasFlag(CoachFactor.JobFailure);
         CoachFullBox.IsChecked = s.CoachFullSatisfaction;
-        CoachHideGMeterBox.IsChecked = s.CoachHideGMeter;
         RefreshCoachLimits();
         NoDamageStatus.Text = DescribeMod(NoDamage.Mod);
         EarningsStatus.Text = DescribeMod(Earnings.Mod);
@@ -219,7 +218,6 @@ public partial class MainWindow : Window
         if (CoachJobFailureBox.IsChecked == true) ignored |= CoachFactor.JobFailure;
         s.CoachIgnored = ignored;
         s.CoachFullSatisfaction = CoachFullBox.IsChecked == true;
-        s.CoachHideGMeter = CoachHideGMeterBox.IsChecked == true;
         s.CoachLimits = limits.IsStock ? null : limits;
         var result = _app.ApplyMods();
         UpdateOverlay();
@@ -397,6 +395,7 @@ public partial class MainWindow : Window
         MapSwap.IsChecked = s.MapSide == MapSide.Swap;
         MapLeft.IsChecked = s.MapSide == MapSide.Left;
         MapRight.IsChecked = s.MapSide == MapSide.Right;
+        HideGMeterBox.IsChecked = s.HideGMeter;
         MapNote.Text = _app.Game is null ? "ETS2 wasn't found." : HudMod.DescribeMapSupport(_app.Game);
         HudStatus.Text = DescribeMod(HudMod.Mod);
 
@@ -426,6 +425,7 @@ public partial class MainWindow : Window
     {
         _app.Settings.MapPositionEnabled = MapBox.IsChecked == true;
         _app.Settings.MapSide = MapLeft.IsChecked == true ? MapSide.Left : MapRight.IsChecked == true ? MapSide.Right : MapSide.Swap;
+        _app.Settings.HideGMeter = HideGMeterBox.IsChecked == true;
         return _app.ApplyMods();
     });
 

@@ -286,10 +286,8 @@
                         </StackPanel>
                         <CheckBox x:Name="CoachJobFailureBox" Content="Extreme g-force no longer fails the job" Margin="0,10,0,0"/>
                         <CheckBox x:Name="CoachFullBox" Content="Passengers board fully satisfied" Margin="0,6,0,0"/>
-                        <CheckBox x:Name="CoachHideGMeterBox" Content="Hide the game's g-force meter on the route advisor" Margin="0,6,0,0"
-                                  ToolTip="Only hides the dial and its needle: passengers still feel the g-forces as set above. The plugin's own live g-force meter (Driving alerts page) is separate."/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. Hiding the g-force meter only changes the HUD; it also replaces the game's ui/adviser_center.sii and ui/template/text.mod_bus.sii, so another mod that changes those (a route advisor mod) can't be used with it. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
+                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The game's g-force meter can be hidden on the HUD page. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyCoach_Click" HorizontalAlignment="Left"/>
@@ -300,11 +298,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem x:Name="HudTab" Header="Route advisor">
+            <TabItem x:Name="HudTab" Header="HUD">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Route advisor map position"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_ui."/>
+                        <TextBlock Style="{StaticResource Title}" Text="HUD"/>
+                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_ui (&quot;ETS2 Utilities: HUD&quot; in Mod Manager). Changes to the game's on-screen display."/>
+
+                        <TextBlock Style="{StaticResource H}" Text="Route advisor map"/>
                         <TextBlock x:Name="MapNote" Style="{StaticResource Note}"/>
                         <CheckBox x:Name="MapBox" Content="Move the route advisor map" Margin="0,6,0,0"/>
                         <StackPanel Margin="20,6,0,0">
@@ -312,6 +312,11 @@
                             <RadioButton x:Name="MapLeft" Content="Always bottom-left" Margin="0,2"/>
                             <RadioButton x:Name="MapRight" Content="Always bottom-right" Margin="0,2"/>
                         </StackPanel>
+
+                        <TextBlock Style="{StaticResource H}" Text="Coach g-force meter"/>
+                        <CheckBox x:Name="HideGMeterBox" Content="Hide the game's g-force meter on the route advisor (coaches)" Margin="0,2,0,0"/>
+                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
+                                   Text="Only the dial and its needle go: passengers still react to g-forces as set on the Coach passengers page, and the satisfaction icon stays. The plugin's own live g-force meter (Driving alerts page) is separate. This replaces the game's ui/adviser_center.sii and ui/template/text.mod_bus.sii, so another mod that changes those (a route advisor mod) can't be used with it."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyHud_Click" HorizontalAlignment="Left"/>

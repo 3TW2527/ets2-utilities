@@ -70,8 +70,18 @@ public sealed class AppSettings
     public Features.CoachFactor CoachIgnored { get; set; }
     public bool CoachFullSatisfaction { get; set; }
 
-    /// <summary>Hides the g-force meter the game shows on the route advisor in a coach.</summary>
-    public bool CoachHideGMeter { get; set; }
+    /// <summary>Hides the g-force meter the game shows on the route advisor in a coach (the HUD mod).</summary>
+    public bool HideGMeter { get; set; }
+
+    /// <summary>0.12.0 and 0.12.1 kept the switch in the Coach comfort mod; read once into <see cref="HideGMeter"/>.</summary>
+    public bool? CoachHideGMeter { get; set; }
+
+    /// <summary>
+    /// The meter was hidden by the Coach comfort mod and has just moved to the HUD mod, which may not be
+    /// enabled anywhere: the app says so once, after the mods are rebuilt.
+    /// </summary>
+    [JsonIgnore]
+    public bool GMeterMoved { get; set; }
 
     /// <summary>When passengers notice g-forces; null = the game's own limits.</summary>
     public Features.CoachGLimits? CoachLimits { get; set; }
@@ -141,6 +151,12 @@ public sealed class AppSettings
             var settings = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new() : new();
             if (settings.CoachNoPenalties == true) settings.CoachIgnored = Features.CoachFactor.All;
             settings.CoachNoPenalties = null;
+            if (settings.CoachHideGMeter is { } hidden)
+            {
+                settings.HideGMeter |= hidden;
+                settings.GMeterMoved = hidden;
+            }
+            settings.CoachHideGMeter = null;
             if (settings.DrivingAlerts == true) settings.CoachAlerts = settings.TruckAlerts = true;
             settings.DrivingAlerts = null;
             if (settings.AlertDefaults < 2)

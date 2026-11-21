@@ -105,9 +105,12 @@ public struct GameplayBytes
 }
 
 /// <summary>Reads the plugin's shared memory. Returns null when the game (or the plugin) isn't running.</summary>
-public sealed class TelemetryReader : IDisposable
+public sealed class TelemetryReader(string mapName = TelemetryReader.MapName) : IDisposable
 {
     public const string MapName = @"Local\Ets2uTelemetry";
+
+    /// <summary>What plugin\test_host.exe has the plugin use (ETS2U_MAP_NAME), so a test never touches a running game's.</summary>
+    public const string TestMapName = @"Local\Ets2uTelemetryTest";
 
     MemoryMappedFile? _map;
     MemoryMappedViewAccessor? _view;
@@ -118,7 +121,7 @@ public sealed class TelemetryReader : IDisposable
         {
             if (_view is null)
             {
-                _map = MemoryMappedFile.OpenExisting(MapName, MemoryMappedFileRights.Read);
+                _map = MemoryMappedFile.OpenExisting(mapName, MemoryMappedFileRights.Read);
                 _view = _map.CreateViewAccessor(0, Marshal.SizeOf<TelemetryFrame>(), MemoryMappedFileAccess.Read);
             }
             _view.Read(0, out TelemetryFrame frame);
