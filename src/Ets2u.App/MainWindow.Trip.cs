@@ -148,6 +148,26 @@ public partial class MainWindow
         _tripRows.Clear();
     }
 
+    DateTime? _jobSeen;
+
+    /// <summary>
+    /// When a coach job starts, says so and shows it, unless a trip is being captured by hand (that stays
+    /// on screen). Runs every second, whichever page is open.
+    /// </summary>
+    void NoticeJobStart()
+    {
+        var current = _hub?.Jobs.Current();
+        if (current?.Started == _jobSeen) return;
+        _jobSeen = current?.Started;
+        if (current is null) return;
+        RefreshTripSources();
+        var showing = Selected.Job == TripSource.Manual && _hub?.Trip.Capturing == true ? null
+            : (TripSourceBox.ItemsSource as IEnumerable<TripSource>)?.FirstOrDefault(s => s.Job == TripSource.CurrentJob);
+        if (showing is not null) TripSourceBox.SelectedItem = showing;
+        _app.Status("Coach job started" + (current.Route.Length > 0 ? $" ({current.Route})" : "") +
+                    ": its summary is being kept (Trip summary page).");
+    }
+
     void TripSource_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (_loading || _settingSources) return;
@@ -201,6 +221,7 @@ public partial class MainWindow
             _tripTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _tripTimer.Tick += (_, _) =>
             {
+                NoticeJobStart();
                 if (TripTab.IsSelected && IsVisible) ShowTrip();
             };
             _tripTimer.Start();

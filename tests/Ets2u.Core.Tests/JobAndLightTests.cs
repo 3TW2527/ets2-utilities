@@ -101,6 +101,55 @@ public class JobTrackerTests
         Assert.Null(jobs.Current());
     }
 
+    // What ETS2 1.62 sent for a real quick bus job, Copenhagen to Trelleborg.
+    const string RealBusJob =
+        "bus.stages.count=1\nbus.stages.current=0\nincome=3081\nplanned_distance.km=94\nbus_job.market=quick_job\n" +
+        "source_stop.type[0]=city\nsource_stop.id[0]=kobenhavn\nsource_stop.name[0]=Copenhagen\n" +
+        "destination_stop.type[0]=city\ndestination_stop.id[0]=trelleborg\ndestination_stop.name[0]=Trelleborg\n" +
+        "source_stop.departure_time.planned[0]=57375\nsource_stop.entering_passengers.planned[0]=44\n";
+    const string RealCompleted = "bus_job.completed\nrevenue=3081\nearned.xp=228\npassenger.satisfaction=1\ndistance.km=97\ndelivery.time=96\n";
+
+    [Fact]
+    public void ARealBusJobIsCompletedWithItsRoute()
+    {
+        var jobs = new JobTracker();
+        var plugin = new Plugin();
+        var now = T0;
+        Drive(jobs, plugin, ref now, 1, 0);
+        plugin.SetJob(2, RealBusJob);
+        Drive(jobs, plugin, ref now, 30, 20);
+        Assert.Equal("Copenhagen → Trelleborg", jobs.Current()!.Route);
+        // The arrival times fill in as the job goes: still the same job.
+        plugin.SetJob(2, RealBusJob + "destination_stop.arrival_time.actual[0]=57471\n");
+        Drive(jobs, plugin, ref now, 1, 0, paused: true);
+        plugin.Event(RealCompleted);
+        Drive(jobs, plugin, ref now, 1, 0, paused: true);
+        plugin.SetJob(0, "");
+        var done = Drive(jobs, plugin, ref now, 1, 0, paused: true)!;
+        Assert.Equal(JobOutcome.Delivered, done.Outcome);
+        Assert.Equal("Delivered, revenue 3081, 228 XP, passengers 100% satisfied", JobText.Describe(done.Outcome, done.Result));
+        Assert.InRange(done.Trip.DrivingTime.TotalSeconds, 29, 31);
+    }
+
+    [Theory]
+    [InlineData("job.delivered", JobOutcome.Delivered)]
+    [InlineData("bus_job.completed", JobOutcome.Delivered)]
+    [InlineData("job.cancelled", JobOutcome.Cancelled)]
+    [InlineData("bus_job.cancelled", JobOutcome.Cancelled)]
+    [InlineData("bus_job.failed", JobOutcome.Failed)]
+    [InlineData("player.fined", null)]
+    [InlineData("player.tollgate.paid", null)]
+    public void TellsHowAJobEnded(string id, JobOutcome? outcome) => Assert.Equal(outcome, JobText.OutcomeOf(id));
+
+    [Fact]
+    public void ARouteOfSeveralStagesRunsFromTheFirstToTheLast() =>
+        Assert.Equal("A → C", JobText.Route(new Dictionary<string, string>
+        {
+            ["source_stop.name[1]"] = "B", ["source_stop.name[0]"] = "A",
+            ["destination_stop.name[0]"] = "B", ["destination_stop.name[1]"] = "C",
+            ["source_stop.type[0]"] = "city",
+        }));
+
     [Fact]
     public void AHalfWrittenJobWaitsForTheNextStep()
     {

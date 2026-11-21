@@ -54,10 +54,14 @@ summary for each job without any buttons: the same events, totals and score as a
 the job ended (delivered, with revenue and XP, or cancelled, with the penalty) and the job's details as the
 game sends them. Pick a job under **Show**; **Copy summary** and **Forget this job** work on it.
 
-- The plugin passes on the game's `job` and `bus_job` configurations and its gameplay events
-  (`*.delivered`, `*.cancelled`) as plain `name=value` text. The SCS SDK doesn't document the bus job's
-  attributes, so the app keeps whatever the game sends and shows it under the summary; the route
-  ("A → B") is read from the source and destination ones it finds.
+- The plugin passes on the game's `job` and `bus_job` configurations and its gameplay events as plain
+  `name=value` text. The SCS SDK doesn't document the bus job's attributes, so the app keeps whatever the
+  game sends and shows it under the summary. In 1.62 a bus job lists its stages as arrays
+  (`source_stop.name[i]`, `destination_stop.name[i]`, planned and actual times, passengers), and ends with
+  `bus_job.completed` (revenue, XP, `passenger.satisfaction` from 0 to 1, distance); truck jobs end with
+  `job.delivered` or `job.cancelled`. The route runs from the first stage's start to the last one's end.
+- When a coach job starts, the app says so and the Trip summary page switches to it, unless you're
+  capturing a trip by hand.
 - A job starts when its configuration appears and ends when it clears (or the next job starts after a
   delivered or cancelled event). Bus jobs are kept, and any job driven only in a coach; truck jobs aren't.
   A job that was never driven (a profile loaded and left) isn't kept.

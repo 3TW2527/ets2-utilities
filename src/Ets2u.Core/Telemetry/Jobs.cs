@@ -6,7 +6,7 @@ namespace Ets2u.Core.Telemetry;
 
 public enum JobKind { None, Truck, Bus }
 
-public enum JobOutcome { InProgress, Delivered, Cancelled, Ended }
+public enum JobOutcome { InProgress, Delivered, Cancelled, Ended, Failed }
 
 /// <summary>
 /// One job driven with the app open: what the game said about it when it started and ended, and the
@@ -58,19 +58,39 @@ public static class JobText
 
     static readonly string[][] Ends =
     [
-        ["source_city", "destination_city"], ["source_stop", "destination_stop"], ["source.name", "target.name"],
-        ["source_company", "destination_company"],
+        ["source_city", "destination_city"], ["source.name", "target.name"], ["source_company", "destination_company"],
     ];
 
+    /// <summary>
+    /// "Copenhagen → Trelleborg". A truck job names its cities; a bus job (game 1.60) lists its stages as
+    /// arrays, source_stop.name[i] and destination_stop.name[i], so the route runs from the first stage's
+    /// start to the last stage's end.
+    /// </summary>
     public static string Route(IReadOnlyDictionary<string, string> job)
     {
+        var from = Stop(job, "source_stop.name", first: true);
+        var to = Stop(job, "destination_stop.name", first: false);
+        if (from is not null || to is not null) return from is null ? to! : to is null ? from : $"{from} → {to}";
         foreach (var pair in Ends)
-            if (job.GetValueOrDefault(pair[0]) is { Length: > 0 } from)
-                return job.GetValueOrDefault(pair[1]) is { Length: > 0 } to ? $"{from} → {to}" : from;
-        // A bus job's attributes aren't documented: anything that looks like a start and an end will do.
-        var source = job.FirstOrDefault(kv => kv.Key.Contains("source", StringComparison.Ordinal) && kv.Value.Length > 0).Value;
-        var target = job.FirstOrDefault(kv => (kv.Key.Contains("destination", StringComparison.Ordinal) || kv.Key.Contains("target", StringComparison.Ordinal)) && kv.Value.Length > 0).Value;
+            if (job.GetValueOrDefault(pair[0]) is { Length: > 0 } start)
+                return job.GetValueOrDefault(pair[1]) is { Length: > 0 } end ? $"{start} → {end}" : start;
+        // Attributes the app doesn't know yet: a source and a destination name, if there are any.
+        string? Named(Func<string, bool> key) =>
+            job.Where(kv => kv.Key.Contains("name", StringComparison.Ordinal) && key(kv.Key) && kv.Value.Length > 0)
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Value).FirstOrDefault();
+        var source = Named(k => k.Contains("source", StringComparison.Ordinal));
+        var target = Named(k => k.Contains("destination", StringComparison.Ordinal) || k.Contains("target", StringComparison.Ordinal));
         return source is null ? target ?? "" : target is null ? source : $"{source} → {target}";
+    }
+
+    /// <summary>The name in key[i] with the lowest (or highest) i, or in key itself.</summary>
+    static string? Stop(IReadOnlyDictionary<string, string> job, string key, bool first)
+    {
+        if (job.GetValueOrDefault(key) is { Length: > 0 } plain) return plain;
+        var stops = job.Where(kv => kv.Key.StartsWith(key + "[", StringComparison.Ordinal) && kv.Value.Length > 0)
+            .Select(kv => (Index: int.TryParse(kv.Key[(key.Length + 1)..].TrimEnd(']'), out var i) ? i : 0, kv.Value))
+            .OrderBy(s => s.Index).ToList();
+        return stops.Count == 0 ? null : first ? stops[0].Value : stops[^1].Value;
     }
 
     public static string Describe(JobOutcome outcome, IReadOnlyDictionary<string, string>? result)
@@ -79,19 +99,36 @@ public static class JobText
         {
             JobOutcome.Delivered => "Delivered",
             JobOutcome.Cancelled => "Cancelled",
+            JobOutcome.Failed => "Failed",
             JobOutcome.InProgress => "In progress",
             _ => "Ended",
         };
         if (result?.GetValueOrDefault("revenue") is { } revenue) text += $", revenue {revenue}";
         if (result?.GetValueOrDefault("earned.xp") is { } xp) text += $", {xp} XP";
+        // 0..1 in the bus job's completed event.
+        if (result?.GetValueOrDefault("passenger.satisfaction") is { } sat
+            && double.TryParse(sat, NumberStyles.Float, CultureInfo.InvariantCulture, out var satisfaction))
+            text += string.Create(CultureInfo.InvariantCulture, $", passengers {satisfaction * 100:0}% satisfied");
         if (result?.GetValueOrDefault("cancel.penalty") is { } penalty) text += $", penalty {penalty}";
         return text;
     }
 
-    public static JobOutcome? OutcomeOf(string eventId) =>
-        eventId.EndsWith(".delivered", StringComparison.Ordinal) ? JobOutcome.Delivered
-        : eventId.EndsWith(".cancelled", StringComparison.Ordinal) ? JobOutcome.Cancelled
-        : null;
+    /// <summary>
+    /// How a gameplay event ends a job: truck jobs are "job.delivered" / "job.cancelled", a bus job ends
+    /// with "bus_job.completed" (game 1.60). Other endings are guessed from the word at the end.
+    /// </summary>
+    public static JobOutcome? OutcomeOf(string eventId)
+    {
+        var dot = eventId.LastIndexOf('.');
+        if (dot < 0 || !eventId[..dot].EndsWith("job", StringComparison.Ordinal)) return null; // fines, tolls, ferries
+        return eventId[(dot + 1)..] switch
+        {
+            "delivered" or "completed" or "finished" => JobOutcome.Delivered,
+            "cancelled" or "canceled" or "abandoned" => JobOutcome.Cancelled,
+            "failed" => JobOutcome.Failed,
+            _ => null,
+        };
+    }
 }
 
 /// <summary>
