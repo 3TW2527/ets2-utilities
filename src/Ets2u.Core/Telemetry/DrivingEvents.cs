@@ -137,6 +137,15 @@ public sealed class DrivingEvent
     public required DateTime Started { get; init; }
     /// <summary>Null while it lasts.</summary>
     public DateTime? Ended { get; internal set; }
+    /// <summary>Speed in km/h when it started, and the latest while it lasts (the last one once it's over).</summary>
+    public double StartKmh { get; internal set; }
+    public double EndKmh { get; internal set; }
+    /// <summary>The most forward and most backward g along the vehicle while it lasted (for cornering: accelerating out or braking into the turn).</summary>
+    public double MaxForwardG { get; internal set; }
+    public double MaxBackwardG { get; internal set; }
+
+    /// <summary>Forward or backward g past this, during a harsh corner, names how the corner was taken.</summary>
+    public const double CornerAlongG = 0.10;
 
     public string Title => Kind switch
     {
@@ -144,6 +153,26 @@ public sealed class DrivingEvent
         DrivingEventKind.Braking => "Harsh braking",
         DrivingEventKind.Cornering => "Harsh cornering",
         _ => "Speeding",
+    };
+
+    /// <summary>The category, as a trip summary lists it.</summary>
+    public string Category => Kind switch
+    {
+        DrivingEventKind.Acceleration => "Acceleration",
+        DrivingEventKind.Braking => "Braking",
+        DrivingEventKind.Cornering => "Cornering",
+        _ => "Speeding",
+    };
+
+    /// <summary>What kind of event within its category, GreenRoad style ("Braking to a stop", "Accelerating while exiting a turn").</summary>
+    public string Variant => Kind switch
+    {
+        DrivingEventKind.Acceleration => StartKmh < 15 ? "Accelerating from a stop" : "Accelerating",
+        DrivingEventKind.Braking => EndKmh < 10 ? "Braking to a stop" : "Braking",
+        DrivingEventKind.Cornering when MaxForwardG >= CornerAlongG && MaxForwardG >= MaxBackwardG => "Accelerating while exiting a turn",
+        DrivingEventKind.Cornering when MaxBackwardG >= CornerAlongG => "Braking while entering a turn",
+        DrivingEventKind.Cornering => "Taking a turn too fast",
+        _ => string.Create(CultureInfo.InvariantCulture, $"Over the {Math.Round(LimitKmh):0} km/h limit"),
     };
 
     public string Detail => Kind == DrivingEventKind.Speeding
@@ -182,9 +211,9 @@ public sealed class DrivingEventDetector
         var along = speedMs < -0.3f ? -forwardG : forwardG;
         var moving = kmh >= MinKmh;
 
-        Check(DrivingEventKind.Acceleration, moving ? Math.Max(along, 0) : 0, now, news);
-        Check(DrivingEventKind.Braking, moving ? Math.Max(-along, 0) : 0, now, news);
-        Check(DrivingEventKind.Cornering, moving ? Math.Abs(rightG) : 0, now, news);
+        Check(DrivingEventKind.Acceleration, moving ? Math.Max(along, 0) : 0, along, kmh, now, news);
+        Check(DrivingEventKind.Braking, moving ? Math.Max(-along, 0) : 0, along, kmh, now, news);
+        Check(DrivingEventKind.Cornering, moving ? Math.Abs(rightG) : 0, along, kmh, now, news);
 
         var limitKmh = limitMs * 3.6;
         var threshold = Speeding ? SpeedingThreshold(limitKmh) : null;
@@ -194,7 +223,11 @@ public sealed class DrivingEventDetector
             // Compared as the dashboard shows it: 57 on the gauge in a 50 counts.
             if (threshold is { } th && Math.Round(kmh) >= Math.Ceiling(Math.Round(th, 3)))
             {
-                speeding = new DrivingEvent { Kind = DrivingEventKind.Speeding, Started = now, Level = AlertLevel.Red, Peak = kmh, LimitKmh = limitKmh };
+                speeding = new DrivingEvent
+                {
+                    Kind = DrivingEventKind.Speeding, Started = now, Level = AlertLevel.Red, Peak = kmh, LimitKmh = limitKmh,
+                    StartKmh = kmh, EndKmh = kmh,
+                };
                 _active[DrivingEventKind.Speeding] = speeding;
                 news.Add(speeding);
             }
@@ -207,27 +240,35 @@ public sealed class DrivingEventDetector
         {
             speeding.Peak = Math.Max(speeding.Peak, kmh);
             speeding.LimitKmh = limitKmh;
+            speeding.EndKmh = kmh;
         }
         return news;
     }
 
-    void Check(DrivingEventKind kind, double g, DateTime now, List<DrivingEvent> news)
+    void Check(DrivingEventKind kind, double g, double along, double kmh, DateTime now, List<DrivingEvent> news)
     {
         var (yellow, red) = Thresholds.For(kind);
         if (!_active.TryGetValue(kind, out var e))
         {
             if (g < yellow) return;
-            e = new DrivingEvent { Kind = kind, Started = now, Peak = g, Level = g >= red ? AlertLevel.Red : AlertLevel.Yellow };
+            e = new DrivingEvent
+            {
+                Kind = kind, Started = now, Peak = g, Level = g >= red ? AlertLevel.Red : AlertLevel.Yellow,
+                StartKmh = kmh, EndKmh = kmh, MaxForwardG = Math.Max(along, 0), MaxBackwardG = Math.Max(-along, 0),
+            };
             _active[kind] = e;
             news.Add(e);
             return;
         }
+        e.EndKmh = kmh;
         if (g < yellow * EndRatio)
         {
             End(kind, now);
             return;
         }
         e.Peak = Math.Max(e.Peak, g);
+        e.MaxForwardG = Math.Max(e.MaxForwardG, along);
+        e.MaxBackwardG = Math.Max(e.MaxBackwardG, -along);
         if (e.Level == AlertLevel.Yellow && g >= red)
         {
             e.Level = AlertLevel.Red;

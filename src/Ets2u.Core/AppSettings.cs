@@ -88,6 +88,9 @@ public sealed class AppSettings
     public Telemetry.DrivingThresholds EffectiveTruckThresholds => Telemetry.DrivingThresholds.Resolve(
         TruckAlertSource, TruckAlertRelax, Telemetry.DrivingThresholds.Truck, TruckThresholds, AlertLimits);
 
+    /// <summary>The currency fuel prices are shown in on the Game information page (a code from the game's options).</summary>
+    public string FuelCurrency { get; set; } = "EUR";
+
     /// <summary>Text on the coaches' front destination display.</summary>
     public Features.BusDisplaySettings BusDisplay { get; set; } = new();
 

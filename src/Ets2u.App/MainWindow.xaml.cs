@@ -73,6 +73,7 @@ public partial class MainWindow : Window
         RefreshProfiles();
         RefreshHud();
         RefreshDriving();
+        RefreshTrip();
         RefreshBusDisplay();
         RefreshLiveries();
         RefreshInfo();
@@ -730,18 +731,41 @@ public partial class MainWindow : Window
     void RefreshInfo()
     {
         var info = _app.Info;
-        FuelGrid.ItemsSource = info?.Countries;
+        var currencies = info?.Currencies ?? [CurrencyInfo.Euro];
+        FuelCurrencyBox.ItemsSource = currencies;
+        FuelCurrencyBox.SelectedItem = currencies.FirstOrDefault(c => c.Code == _app.Settings.FuelCurrency) ?? currencies[0];
+        ShowFuelPrices();
         _cities = (info?.Cities ?? Array.Empty<CityInfo>())
             .Select(c => new CityRow(c, c.Name, c.LocalName, c.Country,
                 c.Source == GameInfo.BaseArchive ? "Base game" : c.Source))
             .ToList();
         FuelNote.Text = info is null
             ? _app.InfoProblem ?? "ETS2 wasn't found."
-            : "Base price in each country, from the game's files. Countries of map DLCs this PC doesn't have are left out.";
+            : "Base price in each country, from the game's files, in any currency the game's options offer (at the game's own exchange rates). Countries of map DLCs this PC doesn't have are left out.";
         CityNote.Text = info is null ? ""
             : "Double-click a city (or press Ctrl+C) to copy its name as the game's console expects it, e.g. " +
               "\"goto Köln\". After goto moves the camera, press Ctrl+F9 to bring the truck there.";
         FilterCities();
+    }
+
+    sealed record FuelRow(string Name, decimal? Price, string PriceText, int CityCount);
+
+    void ShowFuelPrices()
+    {
+        var currency = FuelCurrencyBox.SelectedItem as CurrencyInfo ?? CurrencyInfo.Euro;
+        FuelPriceColumn.Header = $"{currency.Code} per litre";
+        FuelGrid.ItemsSource = _app.Info?.Countries
+            .Select(c => new FuelRow(c.Name, c.FuelPrice * currency.Ratio, c.FuelPrice is { } p ? currency.Format(p) : "", c.CityCount))
+            .ToList();
+    }
+
+    void FuelCurrency_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || FuelCurrencyBox.SelectedItem is not CurrencyInfo currency) return;
+        ShowFuelPrices();
+        if (_app.Settings.FuelCurrency == currency.Code) return;
+        _app.Settings.FuelCurrency = currency.Code;
+        _app.Settings.Save();
     }
 
     void CityFilter_Changed(object sender, TextChangedEventArgs e) => FilterCities();

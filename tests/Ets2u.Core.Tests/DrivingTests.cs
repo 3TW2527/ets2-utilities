@@ -300,3 +300,97 @@ public class MouseDriveControlsTests
         Assert.Equal("-mouse.rel_position.x?0 * c_msens", own.MouseSteeringMix);
     }
 }
+
+public class TripTests
+{
+    static readonly DateTime T0 = new(2026, 1, 1);
+    const float Kmh = 1 / 3.6f;
+
+    static DrivingEventDetector Detector() => new()
+    {
+        Thresholds = new DrivingThresholds
+        {
+            AccelYellow = 0.2, AccelRed = 0.4, BrakeYellow = 0.2, BrakeRed = 0.4, CornerYellow = 0.2, CornerRed = 0.4,
+        },
+    };
+
+    [Fact]
+    public void CountsDrivingTimeDistanceAndEventsOnlyWhileCapturing()
+    {
+        var trip = new TripRecorder();
+        Assert.Null(trip.Snapshot());
+        var d = Detector();
+
+        // Before Start: nothing is kept.
+        trip.Step(T0, 20, false, d.Update(T0, -0.5f, 0, 20, 0));
+        trip.Start(T0);
+        d.Reset(T0);
+        // 2 minutes at 72 km/h (20 m/s), 20 ms frames: 2.4 km.
+        for (var ms = 0; ms <= 120_000; ms += 20)
+        {
+            var now = T0.AddMilliseconds(ms);
+            var braking = ms is >= 30_000 and < 31_000 ? -0.3f : 0;
+            trip.Step(now, 20, true, d.Update(now, braking, 0, 20, 0));
+        }
+        // A pause: no frames, then a minute later the game is back. The gap isn't driving.
+        trip.Step(T0.AddSeconds(150), null, true, []);
+        trip.Step(T0.AddSeconds(180), 20, true, []);
+        trip.Stop(T0.AddSeconds(181));
+        trip.Step(T0.AddSeconds(200), 20, true, d.Update(T0.AddSeconds(200), -0.5f, 0, 20, 0));
+
+        var s = trip.Snapshot()!;
+        Assert.False(s.Capturing);
+        Assert.Equal(120, s.DrivingTime.TotalSeconds, 0);
+        Assert.Equal(2.4, s.DistanceKm, 2);
+        Assert.Equal(72, s.TopKmh, 1);
+        Assert.True(s.InCoach);
+        Assert.False(s.InTruck);
+        var e = Assert.Single(s.Events);
+        Assert.Equal((DrivingEventKind.Braking, AlertLevel.Yellow, "Braking"), (e.Kind, e.Level, e.Category));
+        // One yellow in 2 minutes = 300 per 10 hours, which is red.
+        Assert.Equal(300, s.Score!.Value, 3);
+        Assert.Equal(AlertLevel.Red, TripSummary.Band(s.Score.Value));
+        Assert.Contains("Braking", s.ToText());
+    }
+
+    [Fact]
+    public void ScoreWaitsForAMinuteAndRedCountsDouble()
+    {
+        var events = new[]
+        {
+            new TripEvent(DrivingEventKind.Braking, AlertLevel.Red, T0, T0, "Braking", "Braking", "0.50 g", 0.5, 60, 50, false),
+            new TripEvent(DrivingEventKind.Cornering, AlertLevel.Yellow, T0, T0, "Cornering", "", "0.30 g", 0.3, 60, 50, false),
+        };
+        Assert.Null(new TripSummary(T0, null, TimeSpan.FromSeconds(59), 1, 60, false, true, events).Score);
+        Assert.Equal(3, new TripSummary(T0, null, TimeSpan.FromHours(10), 1, 60, false, true, events).Score!.Value, 6);
+        Assert.Null(TripSummary.Band(19.9));
+        Assert.Equal(AlertLevel.Yellow, TripSummary.Band(20));
+        Assert.Equal(AlertLevel.Red, TripSummary.Band(40));
+    }
+
+    [Fact]
+    public void NamesHowAnEventHappened()
+    {
+        var d = Detector();
+        // Cornering while accelerating out of the turn.
+        var corner = Assert.Single(d.Update(T0, 0.05f, 0.3f, 40 * Kmh, 0));
+        d.Update(T0.AddMilliseconds(100), 0.15f, 0.3f, 42 * Kmh, 0);
+        Assert.Equal("Accelerating while exiting a turn", corner.Variant);
+
+        // Cornering while braking into the turn.
+        var d2 = Detector();
+        var c2 = d2.Update(T0, -0.15f, 0.3f, 60 * Kmh, 0).Single(e => e.Kind == DrivingEventKind.Cornering);
+        Assert.Equal("Braking while entering a turn", c2.Variant);
+
+        // Braking to a stop.
+        var d3 = Detector();
+        var b = Assert.Single(d3.Update(T0, -0.3f, 0, 30 * Kmh, 0));
+        d3.Update(T0.AddSeconds(1), -0.3f, 0, 8 * Kmh, 0);
+        d3.Update(T0.AddSeconds(2), 0, 0, 6 * Kmh, 0);
+        Assert.Equal("Braking to a stop", b.Variant);
+
+        // Pulling away hard.
+        var d4 = Detector();
+        Assert.Equal("Accelerating from a stop", Assert.Single(d4.Update(T0, 0.3f, 0, 8 * Kmh, 0)).Variant);
+    }
+}

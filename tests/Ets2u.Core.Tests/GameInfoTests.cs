@@ -108,6 +108,58 @@ public class GameInfoTests
         Assert.DoesNotContain(info.Cities, c => c.Token == "lehavre");
         Assert.Equal("Köln", info.Cities.Single(c => c.Token == "koln").Name); // no locale: the game's own name
     }
+
+    const string Economy = """
+        SiiNunit
+        {
+        economy_data : economy.data
+        {
+        	currency_code[]: "EUR"
+        	currency_ratio[]: 1
+        	currency_sign1[]: ""
+        	currency_sign2[]: "€"
+        	currency_sign3[]: ""
+
+        	currency_code[]: "CZK"
+        	currency_ratio[]: 24.4
+        	currency_sign1[]: ""
+        	currency_sign2[]: ""
+        	currency_sign3[]: " Kč"
+
+        	currency_code[]: "GBP"
+        	currency_ratio[]: 0.8474
+        	currency_sign1[]: ""
+        	currency_sign2[]: "£"
+        	currency_sign3[]: ""
+
+        	currency_code[]: "BGN*"
+        	currency_ratio[]: 1.9558
+        	currency_sign1[]: ""
+        	currency_sign2[]: "лв"
+        	currency_sign3[]: ""
+        }
+        }
+        """;
+
+    [Fact]
+    public void ReadsTheGamesCurrenciesAndConvertsFuelPrices()
+    {
+        var def = new FakeArchive("def", new() { ["def/economy_data.sii"] = Economy });
+        var info = GameInfo.Read([Def, def]);
+
+        Assert.Equal(["EUR", "CZK", "GBP", "BGN"], info.Currencies.Select(c => c.Code));
+        var czk = info.Currencies.Single(c => c.Code == "CZK");
+        Assert.Equal("54.75 Kč", czk.Format(2.244m));
+        Assert.Equal("£1.902", info.Currencies.Single(c => c.Code == "GBP").Format(2.244m));
+        Assert.Equal("€2.244", info.Currencies[0].Format(2.244m));
+        Assert.Equal("CZK (Kč)", czk.Label);
+    }
+
+    [Fact]
+    public void WithoutEconomyDataOnlyTheEuroIsOffered()
+    {
+        Assert.Equal(["EUR"], GameInfo.Read([Def]).Currencies.Select(c => c.Code));
+    }
 }
 
 /// <summary>Reads the real install. Needs ETS2U_LOCAL=1.</summary>
@@ -125,6 +177,8 @@ public class GameInfoLocalTests(ITestOutputHelper output)
                          string.Join(", ", info.Cities.Where(c => c.Name == c.LocalName).Select(c => c.LocalName)));
         foreach (var g in info.Cities.GroupBy(c => c.Source)) output.WriteLine($"{g.Key}: {g.Count()}");
 
+        output.WriteLine("Currencies: " + string.Join(", ", info.Currencies.Select(c => $"{c.Label} {c.Format(1.5m)}")));
+        Assert.Contains(info.Currencies, c => c.Code == "GBP");
         Assert.Contains(info.Cities, c => c is { Token: "berlin", Country: "Germany" });
         Assert.All(info.Countries, c => Assert.True(c.FuelPrice > 0, c.Name));
         Assert.All(info.Cities, c => Assert.False(string.IsNullOrEmpty(c.Country), c.Token));

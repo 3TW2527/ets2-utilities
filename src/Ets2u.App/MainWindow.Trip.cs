@@ -1,0 +1,233 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
+using System.Windows;
+using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Ets2u.Core.Telemetry;
+
+namespace Ets2u.App;
+
+/// <summary>Points the trip event's chevron down when closed and up when open.</summary>
+public sealed class ChevronAngleConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is true ? 180.0 : 0.0;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
+/// <summary>The trip summary's icons and colours, GreenRoad style: a white glyph on a yellow or red disc.</summary>
+static class TripLook
+{
+    public static readonly Brush Yellow = Frozen(0xF5, 0xA6, 0x0A), Red = Frozen(0xDC, 0x3A, 0x3F),
+        Green = Frozen(0x2E, 0x9E, 0x5B), Grey = Frozen(0xB4, 0xBC, 0xC6);
+
+    static readonly Dictionary<DrivingEventKind, Geometry> Icons = new()
+    {
+        // A brake disc between two arcs.
+        [DrivingEventKind.Braking] = Parse("M 12,6 A 6,6 0 1 1 12,18 A 6,6 0 1 1 12,6 M 5,4 A 11,11 0 0 0 5,20 M 19,4 A 11,11 0 0 1 19,20"),
+        // A curved arrow, turning right.
+        [DrivingEventKind.Cornering] = Parse("M 3,20 C 3,11 8,9 20,9 M 15,4 L 20,9 L 15,14"),
+        // A forward arrow with speed lines.
+        [DrivingEventKind.Acceleration] = Parse("M 8,12 L 22,12 M 17,7 L 22,12 L 17,17 M 2,8 L 6,8 M 0,12 L 4,12 M 2,16 L 6,16"),
+        // A speedometer with its needle near the top of the dial.
+        [DrivingEventKind.Speeding] = Parse("M 3,18 A 10,10 0 1 1 21,18 M 12,15 L 17,8"),
+    };
+
+    public static Geometry Icon(DrivingEventKind kind) => Icons[kind];
+
+    public static Brush Fill(AlertLevel level) => level == AlertLevel.Red ? Red : Yellow;
+
+    static Geometry Parse(string data)
+    {
+        var g = Geometry.Parse(data);
+        g.Freeze();
+        return g;
+    }
+
+    static SolidColorBrush Frozen(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+}
+
+/// <summary>One row of the safety events list. Kept between refreshes so an opened row stays open.</summary>
+public sealed class TripEventRow : INotifyPropertyChanged
+{
+    public sealed record Line(string Label, string Value);
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public TripEventRow(TripEvent e) => Update(e, DateTime.UtcNow);
+
+    public DrivingEventKind Kind { get; private set; }
+    public DateTime Started { get; private set; }
+    public string Category { get; private set; } = "";
+    public string Variant { get; private set; } = "";
+    public string Time { get; private set; } = "";
+    public Brush Fill { get; private set; } = TripLook.Yellow;
+    public Geometry Icon { get; private set; } = Geometry.Empty;
+    public IReadOnlyList<Line> Details { get; private set; } = [];
+    public bool Expanded { get; set; }
+
+    public void Update(TripEvent e, DateTime now)
+    {
+        Kind = e.Kind;
+        Started = e.Started;
+        Category = e.Category;
+        Variant = e.Variant;
+        Time = e.Started.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
+        Fill = TripLook.Fill(e.Level);
+        Icon = TripLook.Icon(e.Kind);
+        var c = CultureInfo.InvariantCulture;
+        var lasted = e.Duration(now).TotalSeconds;
+        Details =
+        [
+            new("Level", e.Level == AlertLevel.Red ? "Red" : "Yellow"),
+            new("Started at", e.Started.ToLocalTime().ToString("HH:mm:ss", c)),
+            new("Lasted", e.Ended is null ? string.Create(c, $"{lasted:0.0} s so far") : string.Create(c, $"{lasted:0.0} s")),
+            e.Kind == DrivingEventKind.Speeding
+                ? new("Top speed", e.Detail)
+                : new("Peak g-force", e.Detail),
+            new("Speed", string.Create(c, $"{e.StartKmh:0} km/h at the start, {e.EndKmh:0} km/h at the end")),
+            new("Vehicle", e.Coach ? "Coach" : "Truck"),
+        ];
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    }
+}
+
+public partial class MainWindow
+{
+    sealed record TripCountRow(string Category, Brush Fill, Geometry Icon, string Counts);
+
+    static readonly DrivingEventKind[] TripKinds =
+        [DrivingEventKind.Acceleration, DrivingEventKind.Braking, DrivingEventKind.Cornering, DrivingEventKind.Speeding];
+
+    readonly ObservableCollection<TripEventRow> _tripRows = new();
+    DispatcherTimer? _tripTimer;
+
+    void RefreshTrip()
+    {
+        if (_tripTimer is null)
+        {
+            TripEvents.ItemsSource = _tripRows;
+            // Once a second while the page is shown; the reader thread captures at 50 Hz either way.
+            _tripTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _tripTimer.Tick += (_, _) =>
+            {
+                if (TripTab.IsSelected && IsVisible) ShowTrip();
+            };
+            _tripTimer.Start();
+            Closed += (_, _) => _tripTimer.Stop();
+        }
+        TripPluginStatus.Text = DescribePlugin();
+        ShowTrip();
+    }
+
+    void StartTrip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hub?.Trip.Snapshot() is { Events.Count: > 0 } last && !last.Capturing
+            && MessageBox.Show(this, "Start a new trip? The last trip's summary will be cleared.", "ETS2 Utilities",
+                   MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            return;
+        Hub.Trip.Start(DateTime.UtcNow);
+        _tripRows.Clear();
+        _app.Status("Capturing a trip. Drive, then press Stop capturing.");
+        ShowTrip();
+    }
+
+    void StopTrip_Click(object sender, RoutedEventArgs e)
+    {
+        _hub?.Trip.Stop(DateTime.UtcNow);
+        _app.Status("Trip captured.");
+        ShowTrip();
+    }
+
+    void CopyTrip_Click(object sender, RoutedEventArgs e)
+    {
+        if (_hub?.Trip.Snapshot() is not { } trip) return;
+        _app.Status(ClipboardText.TrySet(new System.Windows.Interop.WindowInteropHelper(this).Handle, trip.ToText()) ? "Trip summary copied." : "The clipboard is busy; try again.");
+    }
+
+    void ShowTrip()
+    {
+        var trip = _hub?.Trip.Snapshot();
+        var now = DateTime.UtcNow;
+        StartTripButton.IsEnabled = trip is not { Capturing: true };
+        StopTripButton.IsEnabled = trip is { Capturing: true };
+        CopyTripButton.IsEnabled = trip is not null;
+        TripTotals.Visibility = trip is null ? Visibility.Collapsed : Visibility.Visible;
+
+        if (trip is null)
+        {
+            TripStatus.Text = "No trip captured yet.";
+            TripNoEventsText.Text = "Press Start capturing, then drive.";
+            TripNoEvents.Visibility = Visibility.Visible;
+            _tripRows.Clear();
+            return;
+        }
+
+        var c = CultureInfo.InvariantCulture;
+        var started = trip.Started.ToLocalTime();
+        TripStatus.Text = trip.Capturing
+            ? (_hub!.Current.Frame is null
+                ? $"Capturing since {started:HH:mm}. Waiting for the game (needs the plugin, and the game unpaused)."
+                : $"Capturing since {started:HH:mm}.")
+            : $"Trip from {started:HH:mm} to {trip.Stopped!.Value.ToLocalTime():HH:mm}.";
+        var vehicle = (trip.InCoach, trip.InTruck) switch
+        {
+            (true, true) => " · coach and truck",
+            (true, false) => " · coach",
+            (false, true) => " · truck",
+            _ => "",
+        };
+        TripTotalsText.Text = string.Create(c,
+            $"{TripSummary.FormatDuration(trip.DrivingTime)} driving · {trip.DistanceKm:0.0} km · top speed {trip.TopKmh:0} km/h{vehicle}");
+
+        if (trip.Score is { } score)
+        {
+            var band = TripSummary.Band(score);
+            TripScoreText.Text = Math.Round(score).ToString("0", c);
+            TripScoreBadge.Background = band is { } b ? TripLook.Fill(b) : TripLook.Green;
+            TripScoreLabel.Text = "Safety score";
+            TripScoreBadge.ToolTip = "Events per 10 hours of driving, a red event counting as two. Green under 20, yellow under 40, red from 40.";
+        }
+        else
+        {
+            TripScoreText.Text = "–";
+            TripScoreBadge.Background = TripLook.Grey;
+            TripScoreLabel.Text = "Score after 1 min";
+            TripScoreBadge.ToolTip = null;
+        }
+
+        TripCounts.ItemsSource = TripKinds.Select(kind =>
+        {
+            int yellow = trip.Count(kind, AlertLevel.Yellow), red = trip.Count(kind, AlertLevel.Red);
+            var counts = kind == DrivingEventKind.Speeding ? $"{red}"
+                : yellow + red == 0 ? "0" : $"{yellow} yellow · {red} red";
+            var fill = red > 0 ? TripLook.Red : yellow > 0 ? TripLook.Yellow : TripLook.Green;
+            return new TripCountRow(kind switch
+            {
+                DrivingEventKind.Acceleration => "Acceleration",
+                DrivingEventKind.Braking => "Braking",
+                DrivingEventKind.Cornering => "Cornering",
+                _ => "Speeding",
+            }, fill, TripLook.Icon(kind), counts);
+        }).ToList();
+
+        // Update rows in place so an opened row stays open; events only ever get added.
+        for (var i = 0; i < trip.Events.Count; i++)
+        {
+            var ev = trip.Events[i];
+            if (i < _tripRows.Count && _tripRows[i].Started == ev.Started && _tripRows[i].Kind == ev.Kind) _tripRows[i].Update(ev, now);
+            else if (i < _tripRows.Count) { _tripRows.Clear(); i = -1; }
+            else _tripRows.Add(new TripEventRow(ev));
+        }
+        while (_tripRows.Count > trip.Events.Count) _tripRows.RemoveAt(_tripRows.Count - 1);
+
+        TripNoEventsText.Text = trip.Capturing ? "No safety events yet. Keep it smooth." : "No safety events on this trip.";
+        TripNoEvents.Visibility = trip.Events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+}

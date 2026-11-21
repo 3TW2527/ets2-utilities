@@ -28,6 +28,9 @@ public sealed class TelemetryHub : IDisposable
     readonly LiveTelemetry _telemetry = new();
     readonly DrivingEventDetector _detector = new();
     readonly List<DrivingEvent> _events = new();
+
+    /// <summary>The trip being captured for the Trip summary page (started and stopped by a button).</summary>
+    public TripRecorder Trip { get; } = new();
     readonly Thread _thread;
     readonly object _lock = new();
     volatile bool _stop;
@@ -95,19 +98,26 @@ public sealed class TelemetryHub : IDisposable
     void Step(TelemetryFrame? frame, DateTime now)
     {
         var coach = frame is { } v && _vehicles.IsCoach(v.TruckId);
-        if (frame is { } f && (coach ? _settings.CoachAlerts : _settings.TruckAlerts))
+        var alerts = coach ? _settings.CoachAlerts : _settings.TruckAlerts;
+        var capturing = Trip.Capturing;
+        IReadOnlyList<DrivingEvent> news = [];
+        if (frame is { } f && (alerts || capturing))
         {
-            _detector.Speeding = _settings.SpeedingAlerts;
+            // A trip counts speeding even when its alert cards are off.
+            _detector.Speeding = _settings.SpeedingAlerts || capturing;
             _detector.Thresholds = ThresholdsFor(coach);
-            foreach (var e in _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs))
-                if (!_events.Contains(e)) _events.Add(e);
+            news = _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs);
+            if (alerts)
+                foreach (var e in news)
+                    if (!_events.Contains(e) && (e.Kind != DrivingEventKind.Speeding || _settings.SpeedingAlerts)) _events.Add(e);
         }
         else
         {
             _detector.Reset(now);
         }
+        Trip.Step(now, frame?.SpeedMs, coach, news);
         _events.RemoveAll(e => e.Ended is { } end && now - end > Linger);
-        var alerts = _events.Count == 0
+        var cards = _events.Count == 0
             ? []
             : _events.Select(e => new AlertCard(e.Kind, e.Started, e.Level, e.Title, e.Detail, e.Ended)).ToList();
 
@@ -115,7 +125,7 @@ public sealed class TelemetryHub : IDisposable
         {
             _frame = frame;
             _coach = coach;
-            _alerts = alerts;
+            _alerts = cards;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));

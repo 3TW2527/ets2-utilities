@@ -9,6 +9,28 @@ namespace Ets2u.Core.Info;
 public sealed record CountryInfo(string Token, string Name, string LocalName, string Code, decimal? FuelPrice, int CityCount);
 
 /// <summary>
+/// A currency the game's options offer (def/economy_data.sii): <see cref="Ratio"/> of it to the euro, and the
+/// signs the game writes before (<see cref="Prefix"/>) and after (<see cref="Suffix"/>) an amount.
+/// </summary>
+public sealed record CurrencyInfo(string Code, decimal Ratio, string Prefix, string Suffix)
+{
+    public static readonly CurrencyInfo Euro = new("EUR", 1, "€", "");
+
+    /// <summary>A euro amount in this currency, the way the game writes it ("1.234 €"-style signs, e.g. "£1.271", "45.22 Kč").</summary>
+    public string Format(decimal euros)
+    {
+        var value = euros * Ratio;
+        var digits = Math.Abs(value) < 10 ? "0.000" : Math.Abs(value) < 1000 ? "0.00" : "#,0";
+        return Prefix + value.ToString(digits, CultureInfo.InvariantCulture) + Suffix;
+    }
+
+    /// <summary>"EUR (€)", "CZK (Kč)".</summary>
+    public string Label => (Prefix + Suffix).Trim() is { Length: > 0 } sign && sign != Code ? $"{Code} ({sign})" : Code;
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
 /// A city of the installed game. <see cref="LocalName"/> is the game's own "city_name"
 /// (e.g. "Köln"), which the console's goto command takes; <see cref="Name"/> is the English one.
 /// </summary>
@@ -24,6 +46,9 @@ public sealed record CityInfo(string Token, string Name, string LocalName, strin
 /// </summary>
 public sealed record GameInfo(IReadOnlyList<CountryInfo> Countries, IReadOnlyList<CityInfo> Cities)
 {
+    /// <summary>The currencies the game's options offer, the default (euro) first.</summary>
+    public IReadOnlyList<CurrencyInfo> Currencies { get; init; } = [CurrencyInfo.Euro];
+
     public const string BaseArchive = "def";
     const string EnglishNames = "locale/en_gb/localization.sui";
 
@@ -96,7 +121,38 @@ public sealed record GameInfo(IReadOnlyList<CountryInfo> Countries, IReadOnlyLis
             .Where(c => c.CityCount > 0)
             .OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
-        return new GameInfo(countryList, cityList);
+        return new GameInfo(countryList, cityList) { Currencies = ReadCurrencies(archives) };
+    }
+
+    const string EconomyData = "def/economy_data.sii";
+
+    /// <summary>
+    /// The currency_code[] / currency_ratio[] / currency_sign1..3[] lists in economy_data.sii; a later archive's
+    /// list replaces an earlier one. The game marks a few codes with "*" (e.g. "BGN*"); that's left off.
+    /// </summary>
+    static IReadOnlyList<CurrencyInfo> ReadCurrencies(IReadOnlyList<IGameArchive> archives)
+    {
+        IReadOnlyList<CurrencyInfo> found = [CurrencyInfo.Euro];
+        foreach (var archive in archives)
+        {
+            if (archive.Read(EconomyData) is not { } bytes) continue;
+            var text = Decode(bytes);
+            List<string> List(string key) => Regex.Matches(text,
+                    @"^\s*" + Regex.Escape(key) + @"\[\]\s*:\s*(?:""(?<v>[^""]*)""|(?<v>[^\s#]+))", RegexOptions.Multiline)
+                .Select(m => m.Groups["v"].Value).ToList();
+            var codes = List("currency_code");
+            if (codes.Count == 0) continue;
+            var ratios = List("currency_ratio");
+            var (sign1, sign2, sign3) = (List("currency_sign1"), List("currency_sign2"), List("currency_sign3"));
+            static string At(List<string> list, int i) => i < list.Count ? list[i] : "";
+            found = codes
+                .Select((code, i) => (code, ratio: decimal.TryParse(At(ratios, i), NumberStyles.Float, CultureInfo.InvariantCulture, out var r) ? r : 0, i))
+                .Where(c => c.ratio > 0 && c.code.Trim('*').Length > 0)
+                .Select(c => new CurrencyInfo(c.code.Trim('*'), c.ratio, At(sign1, c.i) + At(sign2, c.i), At(sign3, c.i)))
+                .ToList();
+            if (found.Count == 0) found = [CurrencyInfo.Euro];
+        }
+        return found;
     }
 
     /// <summary>
