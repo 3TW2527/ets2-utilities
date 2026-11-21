@@ -97,6 +97,9 @@ public sealed class AppSettings
     /// <summary>Liveries from several mods packed into one.</summary>
     public Liveries.LiveryPackSettings LiveryPack { get; set; } = new();
 
+    /// <summary>Other mods copied with mp_mod_optional added, so they can be used in Convoy.</summary>
+    public Mods.OptionalModsSettings OptionalMods { get; set; } = new();
+
     /// <summary>v0.3's single "satisfaction never drops" switch; read once and turned into <see cref="CoachIgnored"/>.</summary>
     public bool? CoachNoPenalties { get; set; }
 

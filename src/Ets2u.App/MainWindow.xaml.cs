@@ -47,6 +47,8 @@ public partial class MainWindow : Window
             // Liveries are big: download Workshop updates, then check the pack's sources off the UI thread.
             StartLiveries();
             LoadWorkshopList();
+            StartOptional();
+            LoadOptionalWorkshopList();
             // The game can reset controls.sii when its control options change: set them up again.
             // if (_app.MouseControlsNeeded && !_app.GameRunning) Run(() => _app.SetMouseControls(true) + "Mouse driving controls set up again.");
         };
@@ -76,6 +78,7 @@ public partial class MainWindow : Window
         RefreshTrip();
         RefreshBusDisplay();
         RefreshLiveries();
+        RefreshOptional();
         RefreshInfo();
         RefreshBackups();
         RefreshModsPage();

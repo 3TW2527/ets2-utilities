@@ -14,12 +14,13 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Route advisor | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` |
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
+| **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction | Telemetry plugin + on-screen overlay |
 | **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time, distance, top speed, counts per category and a safety score (events per 10 hours, red counting double; green under 20, yellow under 40); copy as text | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
-| **Tools** · Backups | Undo any change the app made (except the livery pack, which is rebuilt from its sources) | Copies taken before every write |
+| **Tools** · Backups | Undo any change the app made (except the livery pack and optional copies, which are rebuilt from their sources) | Copies taken before every write |
 
 Mods are built from the game's own files, read straight out of its `.scs` archives (a few milliseconds,
 nothing extracted). When the game updates, the app rebuilds them on its next start. Every generated mod
@@ -98,6 +99,27 @@ confirm this before it builds a pack that contains Workshop items, and lists eve
 description. Don't share a pack with other people's work in it without their permission. After enabling
 the pack, turn off any of the original livery mods you're subscribed to in Mod Manager.
 
+## Make optional
+
+Convoy only lets players without a mod join when the mod's `manifest.sii` says `mp_mod_optional: true`.
+Many mods that only change your own vehicle don't, such as engine, gearbox or tire packs. The Make optional
+page copies such a mod into the mod folder as `ets2u_opt_<id>_<tag>.scs` (`<id>` is the Workshop ID, or the
+file name of a local mod): every file as it is, picture and description included, and the manifest with
+`mp_mod_optional: true` added and "(optional)" after its name. Nothing else in the mod changes.
+
+- The original isn't touched. Editing a Workshop item in place wouldn't last: Steam puts its own files back
+  when the item updates or the game files are verified, and Convoy tells Workshop mods apart by their ID.
+- Pick subscribed Workshop items from the list, or add a local `.scs`, `.zip` or folder. Workshop titles are
+  read from Steam, since many manifests have no name.
+- On start, a copy whose original changed (Steam updated it) is rebuilt. Unticking a mod removes its copy;
+  **Remove** also forgets it.
+- In Mod Manager, enable the copy and switch the original off, or the mod loads twice. The page says which
+  profiles still have the original on.
+- Physics of your own vehicle (engine, gearbox, tires) is worked out on your PC, so you get the full effect.
+  What players without the mod see or hear of your vehicle depends on the game; test it in a convoy.
+- The copies are for your own use. Don't share them, and if a creator asks that their mod isn't modified,
+  ask them first.
+
 ## Install
 
 1. Download `ets2-utilities-v<version>-win-x64.zip` from the Releases page and unzip it anywhere.
@@ -144,6 +166,7 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Coach comfort and g-force limits | Applies to your own passengers only |
 | Destination display | Only changes what you see on your own coach |
 | Livery pack | Others see your livery only if they have it too; the pack is optional for them |
+| Make optional | The copy is optional for others; what you change (an engine, tires) applies to your own vehicle |
 | Map position | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
@@ -222,7 +245,7 @@ dotnet test
 | Settings | `%APPDATA%\ets2u\settings.json` |
 | Backups (newest 20) | `%LOCALAPPDATA%\ets2u\backups\` |
 | Log | `%LOCALAPPDATA%\ets2u\log.txt` |
-| Generated mods | `Documents\Euro Truck Simulator 2\mod\ets2u_*.scs` |
+| Generated mods and optional copies | `Documents\Euro Truck Simulator 2\mod\ets2u_*.scs` |
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
 | Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
 | Saved destination display texts | `%APPDATA%\ets2u\destination_texts.txt` |

@@ -10,7 +10,13 @@ public static class ModStatus
     public static bool IsInstalled(GamePaths paths, ModSpec mod) => File.Exists(Path.Combine(paths.ModDir, mod.FileName));
 
     /// <summary>Profiles whose profile.sii lists the mod in active_mods (local mods appear as "name|display name").</summary>
-    public static IReadOnlyList<string> ActiveIn(IEnumerable<Profile> profiles, ModSpec mod)
+    public static IReadOnlyList<string> ActiveIn(IEnumerable<Profile> profiles, ModSpec mod) => ActiveIn(profiles, mod.PackageName);
+
+    /// <summary>
+    /// Profiles whose active_mods lists the package (a local mod's file name without extension, or
+    /// "mod_workshop_package.&lt;hex id&gt;" for a Workshop item), ignoring case.
+    /// </summary>
+    public static IReadOnlyList<string> ActiveIn(IEnumerable<Profile> profiles, string packageName)
     {
         var active = new List<string>();
         foreach (var profile in profiles)
@@ -19,7 +25,7 @@ public static class ModStatus
             {
                 var doc = SiiDocument.Parse(SiiCodec.Decode(File.ReadAllBytes(profile.ProfileSiiPath)));
                 var text = doc.ToString();
-                if (text.Contains($"\"{mod.PackageName}|", StringComparison.Ordinal)) active.Add(profile.Name);
+                if (text.Contains($"\"{packageName}|", StringComparison.OrdinalIgnoreCase)) active.Add(profile.Name);
             }
             catch (Exception ex) when (ex is IOException or FormatException or InvalidDataException)
             {

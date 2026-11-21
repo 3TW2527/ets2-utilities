@@ -247,6 +247,88 @@ public sealed class AppServices
         return "A livery mod in your pack changed. " + BuildLiveryPack(progress);
     }
 
+    // ---------- Optional copies ----------
+
+    public ModSpec OptionalSpec(OptionalModEntry entry) => OptionalCopy.Spec(entry.Source, Settings.ModTag ?? "");
+
+    public string OptionalPath(OptionalModEntry entry) => Path.Combine(Paths.ModDir, OptionalSpec(entry).FileName);
+
+    public bool OptionalExists(OptionalModEntry entry) => File.Exists(OptionalPath(entry));
+
+    /// <summary>The copy is wanted and missing, or its original changed since it was built.</summary>
+    public bool OptionalOutdated(OptionalModEntry entry) =>
+        entry.Source.Included && (!OptionalExists(entry) || OptionalCopy.Fingerprint(entry.Source, Paths) != entry.BuiltFingerprint);
+
+    /// <summary>
+    /// Writes the optional copy of one mod (beside its final name, then swapped in). Not backed up, like
+    /// the livery pack: it's made entirely from the original, which stays where it is.
+    /// </summary>
+    public string BuildOptional(OptionalModEntry entry, Action<int, int>? progress = null)
+    {
+        if (GameRunning) throw new GameRunningException();
+        var (package, problem) = LiveryPack.Resolve(entry.Source, Paths);
+        if (package is null) throw new InvalidOperationException($"{entry.Source.Name}: {problem}");
+        var fingerprint = OptionalCopy.Fingerprint(entry.Source, Paths);
+        var path = OptionalPath(entry);
+        Directory.CreateDirectory(Paths.ModDir);
+        var temp = path + ".ets2u-tmp";
+        bool wasOptional;
+        try
+        {
+            using (var file = File.Create(temp))
+                wasOptional = OptionalCopy.Write(file, package, entry.Source.Name, progress);
+            File.Move(temp, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
+        entry.BuiltFingerprint = fingerprint;
+        Settings.Save();
+        Changed?.Invoke();
+        return $"Built {Path.GetFileName(path)} ({new FileInfo(path).Length / 1048576.0:0.0} MB)." +
+               (wasOptional ? " The original was already optional, so the copy isn't needed for Convoy." : "");
+    }
+
+    /// <summary>Deletes the copy from the mod folder (the original isn't touched).</summary>
+    public string RemoveOptional(OptionalModEntry entry)
+    {
+        var path = OptionalPath(entry);
+        if (!File.Exists(path)) return "";
+        if (GameRunning) throw new GameRunningException();
+        File.Delete(path);
+        entry.BuiltFingerprint = null;
+        Settings.Save();
+        Changed?.Invoke();
+        return $"Removed {Path.GetFileName(path)}.";
+    }
+
+    /// <summary>Builds the copies that are wanted and out of date, and removes the unticked ones.</summary>
+    public string? SyncOptional(Action<int, int>? progress = null, bool onStart = false)
+    {
+        var messages = new List<string>();
+        foreach (var entry in Settings.OptionalMods.Mods)
+        {
+            if (!entry.Source.Included)
+            {
+                if (OptionalExists(entry) && !onStart) messages.Add(RemoveOptional(entry));
+                continue;
+            }
+            if (!OptionalOutdated(entry)) continue;
+            if (LiveryPack.Resolve(entry.Source, Paths).Problem is { } problem)
+            {
+                // A copy that's there keeps working; one that was never built can't be.
+                messages.Add($"{entry.Source.Name}: can't update its optional copy, {problem}");
+                continue;
+            }
+            if (GameRunning)
+                return "A mod you made optional changed. Close the game and reopen this app to update its copy.";
+            messages.Add((onStart ? $"{entry.Source.Name} changed. " : "") + BuildOptional(entry, progress));
+        }
+        messages.RemoveAll(m => m.Length == 0);
+        return messages.Count == 0 ? null : string.Join(" ", messages) + " Restart ETS2 to apply.";
+    }
+
     /// <summary>Profiles whose controls.sii is set up for mouse driving, and those that aren't.</summary>
     public (int Ready, int Total) MouseControlsState()
     {

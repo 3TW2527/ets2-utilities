@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -44,16 +44,17 @@ public partial class MainWindow
 
     void RefreshModsPage()
     {
-        var rows = new List<ModRow>
-        {
+        List<ModRow> rows =
+        [
             ModRowFor(NoDamage.Mod, "No damage", NoDamageTab),
             ModRowFor(Earnings.Mod, "Bigger earnings", EarningsTab),
             ModRowFor(CoachComfort.Mod, "Coach passengers", CoachTab),
             ModRowFor(HudMod.Mod, "Route advisor", HudTab),
             ModRowFor(BusDisplay.Mod, "Destination display", BusDisplayTab),
             LiveryPackRow(),
+            .. OptionalRows(),
             new("Telemetry plugin", "Plugin", PluginInstaller.FileName, DescribePlugin() + " Used by: speed overlay, driving alerts.", OverlayTab),
-        };
+        ];
         ModsGrid.ItemsSource = rows;
     }
 
@@ -82,6 +83,22 @@ public partial class MainWindow
         return new ModRow("Livery pack", "Mod", file, state, LiveryTab);
     }
 
+    /// <summary>One row per optional copy (none when the page was never used).</summary>
+    IEnumerable<ModRow> OptionalRows() => _app.Settings.OptionalMods.Mods.Select(m =>
+    {
+        var spec = _app.OptionalSpec(m);
+        string state;
+        if (!m.Source.Included) state = _app.OptionalExists(m) ? "Switched off; still in the mod folder." : "Off.";
+        else if (!_app.OptionalExists(m)) state = "Not built yet.";
+        else
+        {
+            var active = ModStatus.ActiveIn(_app.Profiles, spec);
+            state = (_app.OptionalOutdated(m) ? "The original changed since it was built. " : "") +
+                    (active.Count == 0 ? "Not enabled in any profile yet." : "Enabled in: " + string.Join(", ", active) + ".");
+        }
+        return new ModRow("Optional: " + m.Source.Name, "Mod", spec.FileName, state, OptionalTab);
+    });
+
     void ModsGrid_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (ModsGrid.SelectedItem is ModRow row) Nav.SelectedItem = row.Page;
@@ -91,6 +108,8 @@ public partial class MainWindow
     {
         Run(_app.ApplyMods);
         if (_app.Settings.LiveryPack.Enabled) RunLiveryBuild(progress => _app.BuildLiveryPack(progress));
+        if (_app.Settings.OptionalMods.Mods.Count > 0)
+            RunOptionalBuild(progress => _app.SyncOptional(progress) ?? "The optional copies are up to date.");
     }
 
     void OpenModFolder_Click(object sender, RoutedEventArgs e)

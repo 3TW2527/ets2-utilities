@@ -523,6 +523,85 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem x:Name="OptionalTab" Header="Make optional">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Style="{StaticResource Page}" MaxWidth="900">
+                        <TextBlock Style="{StaticResource Title}" Text="Make optional"/>
+                        <TextBlock x:Name="OptionalIntro" Style="{StaticResource Note}"/>
+
+                        <Border Background="#FDECEA" BorderBrush="#C62828" BorderThickness="2" CornerRadius="4" Padding="12,10" Margin="0,8,0,4">
+                            <StackPanel>
+                                <TextBlock Text="⚠ The copies are for you only" FontWeight="Bold"
+                                           FontSize="14" Foreground="#9B1C1C" TextWrapping="Wrap"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#5F1414" Margin="0,4,0,0"
+                                           Text="Each copy is someone else's mod with one line of its manifest changed. Keep it in your own mod folder: never upload or share it. Some creators ask that their mod isn't modified at all; check its Workshop page, and if it says so, ask them first."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Style="{StaticResource H}" Text="Mods with an optional copy"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Untick a mod to remove its copy from the mod folder without forgetting it. Click a name to rename it (the copy shows in Mod Manager as that name with &quot;(optional)&quot;)."/>
+                        <DataGrid x:Name="OptionalGrid" AutoGenerateColumns="False" HeadersVisibility="Column" Height="180"
+                                  GridLinesVisibility="Horizontal" CanUserAddRows="False" CanUserDeleteRows="False"
+                                  SelectionMode="Single" CanUserSortColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridCheckBoxColumn Header="On" Binding="{Binding Included, UpdateSourceTrigger=PropertyChanged}" Width="34"/>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
+                                <DataGridTextColumn Header="From" Binding="{Binding Where}" Width="150" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="Copy" Binding="{Binding File}" Width="200" IsReadOnly="True"/>
+                                <DataGridTextColumn Header="State" Binding="{Binding State}" Width="*" IsReadOnly="True">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="TextWrapping" Value="Wrap"/>
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button Content="Add mod file…" Click="OptionalAddFile_Click" Margin="0,0,8,6"/>
+                            <Button Content="Add mod folder…" Click="OptionalAddFolder_Click" Margin="0,0,8,6"/>
+                            <Button Content="Remove" Click="OptionalRemove_Click" Margin="0,0,8,6"
+                                    ToolTip="Forgets the mod and deletes its copy (the original isn't touched)"/>
+                            <Button Content="Open Workshop page" Click="OptionalPage_Click" Margin="0,0,8,6"/>
+                        </WrapPanel>
+
+                        <TextBlock Style="{StaticResource H}" Text="Workshop items you're subscribed to"/>
+                        <TextBlock Style="{StaticResource Note}"
+                                   Text="Pick one or more and press Make optional. Steam keeps the originals up to date, and the app rebuilds a copy on start when its original changes."/>
+                        <CheckBox x:Name="OptionalNotOptionalOnlyBox" Content="Only show mods that aren't optional yet" IsChecked="True"
+                                  Margin="0,2,0,6" Click="OptionalFilter_Click"/>
+                        <DataGrid x:Name="OptionalWorkshopGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
+                                  GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Extended" Height="200"
+                                  MouseDoubleClick="OptionalWorkshopAdd_Click">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="280"/>
+                                <DataGridTextColumn Header="Author" Binding="{Binding Author}" Width="130"/>
+                                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="90"/>
+                                <DataGridTextColumn Header="" Binding="{Binding Note}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <WrapPanel Margin="0,6,0,0">
+                            <Button Content="Make optional" Click="OptionalWorkshopAdd_Click" Margin="0,0,8,6"/>
+                            <Button Content="Open Workshop page" Click="OptionalWorkshopPage_Click" Margin="0,0,8,6"/>
+                            <Button Content="Refresh" Click="OptionalRefresh_Click" Margin="0,0,8,6"/>
+                        </WrapPanel>
+
+                        <Border Style="{StaticResource ApplyBar}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button x:Name="OptionalBuildButton" Content="Save and build copies" Click="OptionalBuild_Click"/>
+                                    <ProgressBar x:Name="OptionalProgress" Width="220" Height="14" Visibility="Collapsed" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock x:Name="OptionalStatus" Style="{StaticResource Status}" Margin="0,6,0,0"/>
+                                <TextBlock Style="{StaticResource Note}"
+                                           Text="Then in Mod Manager: enable the copy and switch the original off, so the mod isn't loaded twice and Convoy doesn't ask the other players for the original. You can stay subscribed: a subscribed mod that's switched off isn't needed to join."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <!-- ================= PLUGIN ================= -->
             <TabItem Header="WITH THE PLUGIN" Tag="group" IsEnabled="False" Focusable="False"/>
 
