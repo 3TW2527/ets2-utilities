@@ -83,15 +83,17 @@ public sealed class TripEventRow : INotifyPropertyChanged
         Icon = TripLook.Icon(e.Kind);
         var c = CultureInfo.InvariantCulture;
         var lasted = e.Duration(now).TotalSeconds;
+        // An event carried over from a copied summary has no duration or speeds (events only start from 5 km/h).
+        var known = e.Ended != e.Started || e.StartKmh > 0 || e.EndKmh > 0;
         Details =
         [
             new("Level", e.Level == AlertLevel.Red ? "Red" : "Yellow"),
             new("Started at", e.Started.ToLocalTime().ToString("HH:mm:ss", c)),
-            new("Lasted", e.Ended is null ? string.Create(c, $"{lasted:0.0} s so far") : string.Create(c, $"{lasted:0.0} s")),
+            .. known ? [new Line("Lasted", e.Ended is null ? string.Create(c, $"{lasted:0.0} s so far") : string.Create(c, $"{lasted:0.0} s"))] : Array.Empty<Line>(),
             e.Kind == DrivingEventKind.Speeding
                 ? new("Top speed", e.Detail)
                 : new("Peak g-force", e.Detail),
-            new("Speed", string.Create(c, $"{e.StartKmh:0} km/h at the start, {e.EndKmh:0} km/h at the end")),
+            .. known ? [new Line("Speed", string.Create(c, $"{e.StartKmh:0} km/h at the start, {e.EndKmh:0} km/h at the end"))] : Array.Empty<Line>(),
             new("Vehicle", e.Coach ? "Coach" : "Truck"),
         ];
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
