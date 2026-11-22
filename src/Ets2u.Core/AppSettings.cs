@@ -57,6 +57,10 @@ public sealed class AppSettings
     /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
     public bool RecordCoachJobs { get; set; } = true;
 
+    /// <summary>The order of the Trip summary page's safety events.</summary>
+    public Telemetry.TripSort TripSort { get; set; } = Telemetry.TripSort.Time;
+    public bool TripSortDescending { get; set; }
+
     /// <summary>The floating live g-force meter, and where it was dragged to (null = the default place).</summary>
     public bool GForceMeter { get; set; }
     public double? GForceMeterLeft { get; set; }

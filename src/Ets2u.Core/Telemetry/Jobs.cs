@@ -93,6 +93,27 @@ public static class JobText
         return stops.Count == 0 ? null : first ? stops[0].Value : stops[^1].Value;
     }
 
+    /// <summary>
+    /// The job in a few words for the summary page: "Pay 3081 · 94 km planned · 44 passengers". Only what
+    /// a player cares about; the game's other attributes (stop ids, planned times) are left out.
+    /// </summary>
+    public static string Facts(IReadOnlyDictionary<string, string> job)
+    {
+        var c = CultureInfo.InvariantCulture;
+        var parts = new List<string>();
+        if (job.GetValueOrDefault("income") is { Length: > 0 } income) parts.Add("Pay " + income);
+        if (Number(job.GetValueOrDefault("planned_distance.km")) is { } km) parts.Add(string.Create(c, $"{km:0} km planned"));
+        if (Number(job.GetValueOrDefault("bus.stages.count")) is { } stages && stages > 1) parts.Add(string.Create(c, $"{stages:0} stages"));
+        var passengers = job.Where(kv => kv.Key.StartsWith("source_stop.entering_passengers.planned", StringComparison.Ordinal))
+            .Sum(kv => Number(kv.Value) ?? 0);
+        if (passengers > 0) parts.Add(string.Create(c, $"{passengers:0} passengers"));
+        if (job.GetValueOrDefault("cargo") is { Length: > 0 } cargo) parts.Add(cargo);
+        return string.Join(" · ", parts);
+    }
+
+    static double? Number(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : null;
+
     public static string Describe(JobOutcome outcome, IReadOnlyDictionary<string, string>? result)
     {
         var text = outcome switch
@@ -156,6 +177,12 @@ public sealed class JobTracker
                 ? new JobSummary(_started, null, _kind, JobOutcome.InProgress, _job, _result?.Attributes, _result?.Id, trip)
                 : null;
         }
+    }
+
+    /// <summary>Takes an event off the job being driven.</summary>
+    public bool RemoveEvent(DateTime started, DrivingEventKind kind)
+    {
+        lock (_lock) return _trip?.Remove(started, kind) == true;
     }
 
     public bool Active

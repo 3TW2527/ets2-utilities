@@ -212,6 +212,59 @@ public partial class MainWindow
         ShowTrip();
     }
 
+    static readonly Dictionary<TripSort, string> SortNames = new()
+    {
+        [TripSort.Time] = "Time", [TripSort.Type] = "Type", [TripSort.Level] = "Level", [TripSort.Duration] = "How long",
+    };
+
+    static readonly Dictionary<bool, string> SortDirections = new() { [false] = "Ascending", [true] = "Descending" };
+
+    void TripSort_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_loading || _settingSort) return;
+        var s = _app.Settings;
+        s.TripSort = TripSortBox.SelectedValue is TripSort by ? by : TripSort.Time;
+        s.TripSortDescending = TripSortDirectionBox.SelectedValue is true;
+        s.Save();
+        ShowTrip();
+    }
+
+    bool _settingSort;
+
+    void RemoveTripEvent_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not TripEventRow row) return;
+        var removed = Selected.Job switch
+        {
+            TripSource.Manual => _hub?.Trip.Remove(row.Started, row.Kind) == true,
+            TripSource.CurrentJob => _hub?.Jobs.RemoveEvent(row.Started, row.Kind) == true,
+            var i when i >= 0 && i < Jobs.Count => RemoveSaved(i, row),
+            _ => false,
+        };
+        if (!removed) return;
+        _app.Status($"Removed the {row.Category.ToLowerInvariant()} event at {row.Started.ToLocalTime():HH:mm:ss}; the score no longer counts it.");
+        _sourcesKey = ""; // the Show list has each job's score
+        ShowTrip();
+    }
+
+    bool RemoveSaved(int index, TripEventRow row)
+    {
+        var job = Jobs[index];
+        if (!job.Trip.Events.Any(ev => ev.Started == row.Started && ev.Kind == row.Kind)) return false;
+        Jobs[index] = job with { Trip = job.Trip.Without(row.Started, row.Kind) };
+        try
+        {
+            JobLog.Save(Jobs);
+            return true;
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            Jobs[index] = job;
+            _app.Status("Couldn't save the coach job's summary: " + ex.Message);
+            return false;
+        }
+    }
+
     void RefreshTrip()
     {
         if (_tripTimer is null)
@@ -229,6 +282,16 @@ public partial class MainWindow
         }
         TripPluginStatus.Text = DescribePlugin();
         RecordJobsBox.IsChecked = _app.Settings.RecordCoachJobs;
+        _settingSort = true;
+        TripSortBox.ItemsSource = SortNames;
+        TripSortBox.DisplayMemberPath = "Value";
+        TripSortBox.SelectedValuePath = "Key";
+        TripSortBox.SelectedValue = _app.Settings.TripSort;
+        TripSortDirectionBox.ItemsSource = SortDirections;
+        TripSortDirectionBox.DisplayMemberPath = "Value";
+        TripSortDirectionBox.SelectedValuePath = "Key";
+        TripSortDirectionBox.SelectedValue = _app.Settings.TripSortDescending;
+        _settingSort = false;
         RefreshTripSources();
         ShowTrip();
     }
@@ -283,11 +346,9 @@ public partial class MainWindow
         TripJobDetails.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
         if (job is not null)
         {
-            // The game's own words for the job, whatever its attributes are called.
-            var lines = job.Job.Select(kv => $"{kv.Key}: {kv.Value}").ToList();
-            if (job.ResultEvent is not null)
-                lines.Add($"{job.ResultEvent}: " + string.Join(", ", (job.Result ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key} {kv.Value}")));
-            TripJobDetails.Text = lines.Count == 0 ? "The game sent no details for this job." : string.Join("\n", lines);
+            // A few words about the job; its result is in the status line above.
+            TripJobDetails.Text = JobText.Facts(job.Job);
+            TripJobDetails.Visibility = TripJobDetails.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
 
         if (trip is null)
@@ -352,15 +413,21 @@ public partial class MainWindow
             }, fill, TripLook.Icon(kind), counts);
         }).ToList();
 
-        // Update rows in place so an opened row stays open; events only ever get added.
-        for (var i = 0; i < trip.Events.Count; i++)
+        // Rows are kept by event, so an opened row stays open however the list is sorted.
+        var s = _app.Settings;
+        var ordered = TripEventOrder.Sort(trip.Events, s.TripSort, s.TripSortDescending, now);
+        var kept = _tripRows.ToDictionary(r => (r.Started, r.Kind));
+        var rows = ordered.Select(ev =>
         {
-            var ev = trip.Events[i];
-            if (i < _tripRows.Count && _tripRows[i].Started == ev.Started && _tripRows[i].Kind == ev.Kind) _tripRows[i].Update(ev, now);
-            else if (i < _tripRows.Count) { _tripRows.Clear(); i = -1; }
-            else _tripRows.Add(new TripEventRow(ev));
+            if (kept.TryGetValue((ev.Started, ev.Kind), out var row)) row.Update(ev, now);
+            else row = new TripEventRow(ev);
+            return row;
+        }).ToList();
+        if (!rows.SequenceEqual(_tripRows))
+        {
+            _tripRows.Clear();
+            foreach (var row in rows) _tripRows.Add(row);
         }
-        while (_tripRows.Count > trip.Events.Count) _tripRows.RemoveAt(_tripRows.Count - 1);
 
         TripNoEventsText.Text = trip.Capturing ? "No safety events yet. Keep it smooth." : job is not null ? "No safety events on this job." : "No safety events on this trip.";
         TripNoEvents.Visibility = trip.Events.Count == 0 ? Visibility.Visible : Visibility.Collapsed;

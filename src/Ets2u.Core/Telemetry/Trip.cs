@@ -37,6 +37,10 @@ public sealed record TripSummary(
     public double? Score => DrivingTime < TimeSpan.FromMinutes(10) ? null
         : (Count(AlertLevel.Yellow) + 2.0 * Count(AlertLevel.Red)) / DrivingTime.TotalHours * 10;
 
+    /// <summary>The summary without one event (a saved job's, taken off by hand).</summary>
+    public TripSummary Without(DateTime started, DrivingEventKind kind) =>
+        this with { Events = Events.Where(e => e.Started != started || e.Kind != kind).ToList() };
+
     /// <summary>"1 h 44 min driving (6 min 27 s real)".</summary>
     public string DrivingText => $"{FormatDuration(DrivingTime)} driving" +
                                  (RealDrivingTime is { } real && real != DrivingTime ? $" ({FormatDuration(real)} real)" : "");
@@ -70,6 +74,29 @@ public sealed record TripSummary(
         t.TotalHours >= 1 ? $"{(int)t.TotalHours} h {t.Minutes:00} min" : $"{t.Minutes} min {t.Seconds:00} s";
 }
 
+public enum TripSort { Time, Type, Level, Duration }
+
+/// <summary>The order the safety events list is shown in.</summary>
+public static class TripEventOrder
+{
+    /// <summary>
+    /// By time; by type (acceleration, braking, cornering, speeding); by level (yellow, red); or by how long
+    /// each lasted. Ties go by time, oldest first, whichever way the list runs.
+    /// </summary>
+    public static IReadOnlyList<TripEvent> Sort(IEnumerable<TripEvent> events, TripSort by, bool descending, DateTime now)
+    {
+        Func<TripEvent, IComparable> key = by switch
+        {
+            TripSort.Type => e => e.Kind,
+            TripSort.Level => e => e.Level == AlertLevel.Red ? 1 : 0,
+            TripSort.Duration => e => e.Duration(now),
+            _ => e => e.Started,
+        };
+        var ordered = descending ? events.OrderByDescending(key) : events.OrderBy(key);
+        return ordered.ThenBy(e => e.Started).ThenBy(e => e.Kind).ToList();
+    }
+}
+
 /// <summary>
 /// Captures a trip between Start and Stop: driving time (while moving), distance, top speed and the safety
 /// events the detector finds. Fed by the telemetry reader thread; read by the UI. Thread-safe.
@@ -83,6 +110,8 @@ public sealed class TripRecorder
 
     readonly object _lock = new();
     readonly List<(DrivingEvent Event, bool Coach)> _events = new();
+    /// <summary>Events taken off the list; one still going on would otherwise come back when it turns red.</summary>
+    readonly HashSet<DrivingEvent> _removed = new(ReferenceEqualityComparer.Instance);
     DateTime _started;
     DateTime? _stopped;
     DateTime? _lastFrame;
@@ -101,6 +130,7 @@ public sealed class TripRecorder
         lock (_lock)
         {
             _events.Clear();
+            _removed.Clear();
             _started = now;
             _stopped = null;
             _lastFrame = null;
@@ -129,7 +159,7 @@ public sealed class TripRecorder
         {
             if (!_any || _stopped is not null) return;
             foreach (var e in news)
-                if (!_events.Any(x => ReferenceEquals(x.Event, e))) _events.Add((e, coach));
+                if (!_removed.Contains(e) && !_events.Any(x => ReferenceEquals(x.Event, e))) _events.Add((e, coach));
             if (speedMs is not { } ms)
             {
                 _lastFrame = null;
@@ -149,6 +179,19 @@ public sealed class TripRecorder
                 _topKmh = Math.Max(_topKmh, kmh);
                 if (coach) _coach = true; else _truck = true;
             }
+        }
+    }
+
+    /// <summary>Takes an event off the trip (it no longer counts in the score); false when there's no such event.</summary>
+    public bool Remove(DateTime started, DrivingEventKind kind)
+    {
+        lock (_lock)
+        {
+            var i = _events.FindIndex(x => x.Event.Started == started && x.Event.Kind == kind);
+            if (i < 0) return false;
+            _removed.Add(_events[i].Event);
+            _events.RemoveAt(i);
+            return true;
         }
     }
 

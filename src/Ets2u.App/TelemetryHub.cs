@@ -120,8 +120,8 @@ public sealed class TelemetryHub : IDisposable
         List<DrivingEvent> shown = [];
         if (frame is { } f && (alerts || capturing))
         {
-            // A trip counts speeding even when its alert cards are off.
-            _detector.Speeding = _settings.SpeedingAlerts || capturing;
+            // Speeding is left out everywhere (alerts, light, trips, jobs) while its switch is off.
+            _detector.Speeding = _settings.SpeedingAlerts;
             _detector.Thresholds = ThresholdsFor(coach);
             news = _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs);
             if (alerts)

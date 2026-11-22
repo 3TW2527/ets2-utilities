@@ -695,7 +695,7 @@
                         END OF MOUSE DRIVING -->
 
                         <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
-                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds (below); the app tells which you&apos;re driving. Speeding always shows in red. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
+                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds (below); the app tells which you&apos;re driving. Speeding shows in red, while Speeding alerts (below) is ticked; unticked, it isn't counted anywhere, trip and job summaries included. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                             <CheckBox x:Name="CoachAlertsBox" Content="In coaches" Margin="0,0,24,0"/>
                             <CheckBox x:Name="TruckAlertsBox" Content="In trucks"/>
@@ -814,7 +814,7 @@
                     <StackPanel Style="{StaticResource Page}">
                         <TextBlock Style="{StaticResource Title}" Text="Trip summary, GreenRoad style"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Press Start capturing before you set off and Stop capturing when you arrive. While it captures, every harsh acceleration, braking, cornering and speeding event is listed here with its time, using the thresholds on the Driving alerts page for the vehicle you&apos;re in, whether the alert cards are on or off (speeding always counts). Click an event for its details. Keep this app open while you drive; the trip is kept until you start the next one or close the app."/>
+                                   Text="Press Start capturing before you set off and Stop capturing when you arrive. While it captures, every harsh acceleration, braking, cornering and speeding event is listed here with its time, using the thresholds on the Driving alerts page for the vehicle you&apos;re in, whether the alert cards are on or off (speeding only while Speeding alerts is ticked). Click an event for its details. Keep this app open while you drive; the trip is kept until you start the next one or close the app."/>
                         <TextBlock x:Name="TripPluginStatus" Style="{StaticResource Status}"/>
                         <CheckBox x:Name="RecordJobsBox" Margin="0,6,0,0" Click="RecordJobs_Click" FontWeight="SemiBold"
                                   Content="Also keep a summary of every coach job, from when you take it to when it's delivered or cancelled"/>
@@ -877,7 +877,14 @@
 
                         <Border Background="White" BorderBrush="#D8E0EA" BorderThickness="1" CornerRadius="4" Margin="0,12,0,0">
                             <StackPanel>
-                                <TextBlock Text="Safety events" FontSize="17" Foreground="#4A4A4A" Margin="16,12"/>
+                                <DockPanel Margin="16,12">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="Sort by" VerticalAlignment="Center" Foreground="#5A5A5A" Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="TripSortBox" Width="110" SelectionChanged="TripSort_Changed"/>
+                                        <ComboBox x:Name="TripSortDirectionBox" Width="130" Margin="6,0,0,0" SelectionChanged="TripSort_Changed"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Safety events" FontSize="17" Foreground="#4A4A4A" VerticalAlignment="Center"/>
+                                </DockPanel>
                                 <Border x:Name="TripNoEvents" BorderBrush="#E3E8EE" BorderThickness="0,1,0,0">
                                     <TextBlock x:Name="TripNoEventsText" Foreground="#5A5A5A" Margin="16,14"/>
                                 </Border>
@@ -886,6 +893,7 @@
                                         <DataTemplate>
                                             <Border BorderBrush="#E3E8EE" BorderThickness="0,1,0,0">
                                                 <StackPanel>
+                                                    <Grid>
                                                     <ToggleButton x:Name="Expand" Cursor="Hand" Focusable="False" IsChecked="{Binding Expanded}">
                                                         <ToggleButton.Template>
                                                             <ControlTemplate TargetType="ToggleButton">
@@ -924,6 +932,10 @@
                                                             </Path>
                                                         </Grid>
                                                     </ToggleButton>
+                                                    <!-- Over the row, not in it, so a click removes without opening the row. -->
+                                                    <Button Content="Remove" Click="RemoveTripEvent_Click" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                            Margin="0,0,48,0" Padding="8,2" ToolTip="Take this event off the list: it no longer counts in the score"/>
+                                                    </Grid>
                                                     <ItemsControl ItemsSource="{Binding Details}" Margin="88,0,16,12" ItemTemplate="{StaticResource KeyValueRow}"
                                                                   Visibility="{Binding IsChecked, ElementName=Expand, Converter={StaticResource BoolToVisible}}"/>
                                                 </StackPanel>

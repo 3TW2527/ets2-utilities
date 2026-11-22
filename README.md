@@ -17,7 +17,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the last 30 minutes' safety score), both or neither | Telemetry plugin + on-screen overlay |
-| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time and distance in game time (with the real ones beside them), top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
+| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event (speeding only while its alerts are on) is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click, sorted by time, type, level or duration, and each can be removed; driving time and distance in game time (with the real ones beside them), top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
 | **Tools** · Backups | Undo any change the app made (except the livery pack and optional copies, which are rebuilt from their sources) | Copies taken before every write |
@@ -51,12 +51,12 @@ file; turn off other mods that change `bus_economy_data.sii`, or only one of the
 
 With **Also keep a summary of every coach job** on (Trip summary page, on by default), the app keeps a trip
 summary for each job without any buttons: the same events, totals and score as a captured trip, plus how
-the job ended (delivered, with revenue and XP, or cancelled, with the penalty) and the job's details as the
-game sends them. Pick a job under **Show**; **Copy summary** and **Forget this job** work on it.
+the job ended (delivered, with revenue and XP, or cancelled, with the penalty) and a line about the job (pay,
+planned distance, passengers). Pick a job under **Show**; **Copy summary** and **Forget this job** work on it.
 
 - The plugin passes on the game's `job` and `bus_job` configurations and its gameplay events as plain
   `name=value` text. The SCS SDK doesn't document the bus job's attributes, so the app keeps whatever the
-  game sends and shows it under the summary. In 1.62 a bus job lists its stages as arrays
+  game sends (in `coach_jobs.json`), but shows only the few that matter to a player. In 1.62 a bus job lists its stages as arrays
   (`source_stop.name[i]`, `destination_stop.name[i]`, planned and actual times, passengers), and ends with
   `bus_job.completed` (revenue, XP, `passenger.satisfaction` from 0 to 1, distance); truck jobs end with
   `job.delivered` or `job.cancelled`. The route runs from the first stage's start to the last one's end.
@@ -68,6 +68,18 @@ game sends them. Pick a job under **Show**; **Copy summary** and **Forget this j
 - The app and the plugin must be running for the whole job: a job is only seen while the app is open.
   Closing the game mid-job and coming back to it carries on the same summary as long as the app stayed open.
 - Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` (newest 200).
+
+## Safety events list
+
+The Trip summary page lists the trip's or job's events. **Sort by** orders them by time, type
+(acceleration, braking, cornering, speeding), level (yellow, red) or how long each lasted, ascending or
+descending; ties go by time. The order is remembered. **Remove** on an event takes it off the list, and it
+no longer counts in the totals or the score: on a trip being captured or a job being driven (an event
+still going on stays off when it turns red), and on a saved job, whose file is updated.
+
+Speeding is only detected while **Speeding alerts** is ticked on the Driving alerts page. Unticked, it
+isn't counted anywhere: not as cards, not on the traffic light and not in trip or job summaries. (Before
+0.12.4 trips and jobs counted it anyway.) Events already in a summary stay until removed.
 - This needs plugin version 5 (0.12.1): install the plugin again from the app.
 
 ## Safety score
