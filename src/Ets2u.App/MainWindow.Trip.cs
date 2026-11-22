@@ -164,8 +164,10 @@ public partial class MainWindow
         var showing = Selected.Job == TripSource.Manual && _hub?.Trip.Capturing == true ? null
             : (TripSourceBox.ItemsSource as IEnumerable<TripSource>)?.FirstOrDefault(s => s.Job == TripSource.CurrentJob);
         if (showing is not null) TripSourceBox.SelectedItem = showing;
-        _app.Status("Coach job started" + (current.Route.Length > 0 ? $" ({current.Route})" : "") +
-                    ": its summary is being kept (Trip summary page).");
+        var route = current.Route.Length > 0 ? $" ({current.Route})" : "";
+        _app.Status(_hub?.Jobs.Waiting == true
+            ? $"Coach job in progress from before{route}: its summary carries on once the game loads the job again."
+            : $"Coach job started{route}: its summary is being kept (Trip summary page).");
     }
 
     void TripSource_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -347,7 +349,8 @@ public partial class MainWindow
         if (job is not null)
         {
             // A few words about the job; its result is in the status line above.
-            TripJobDetails.Text = JobText.Facts(job.Job);
+            TripJobDetails.Text = JobText.Facts(job.Job) + (job.AppClosed ? "\n" + JobSummary.AppClosedNote : "");
+            TripJobDetails.Text = TripJobDetails.Text.TrimStart('\n');
             TripJobDetails.Visibility = TripJobDetails.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
 
@@ -364,7 +367,8 @@ public partial class MainWindow
         var started = trip.Started.ToLocalTime();
         TripStatus.Text = job is not null
             ? (job.Outcome == JobOutcome.InProgress
-                ? $"Coach job since {started:HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}."
+                ? $"Coach job since {started:d MMM HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}." +
+                  (_hub?.Jobs.Waiting == true ? " Waiting for the game to load it again: it carries on then." : "")
                 : $"Coach job from {started:d MMM HH:mm} to {job.Ended!.Value.ToLocalTime():HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}: " +
                   JobText.Describe(job.Outcome, job.Result) + ".")
             : trip.Capturing

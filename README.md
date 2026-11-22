@@ -65,8 +65,17 @@ planned distance, passengers). Pick a job under **Show**; **Copy summary** and *
 - A job starts when its configuration appears and ends when it clears (or the next job starts after a
   delivered or cancelled event). Bus jobs are kept, and any job driven only in a coach; truck jobs aren't.
   A job that was never driven (a profile loaded and left) isn't kept.
-- The app and the plugin must be running for the whole job: a job is only seen while the app is open.
-  Closing the game mid-job and coming back to it carries on the same summary as long as the app stayed open.
+- A job outlives the game and the app being closed. The app saves the job in progress to
+  `%APPDATA%\ets2u\coach_job_current.json` whenever it changes (and every 30 seconds while you drive),
+  and holds it when the game restarts or the app starts again. When the game sends the same job (same
+  stops or cities, pay, planned distance and market), the same summary carries on; another job, or 10
+  seconds of driving with none, ends the held one (as "Ended"). Loading an older save on the same job
+  carries on too.
+- While the app is closed nothing is recorded: driving then has no events, and its time and distance are
+  missing. Such a job is marked as such, and when it's delivered its distance is the game's own, with
+  the driving time stretched to match, so the score is taken over the whole job (a little kinder than it
+  should be, as the missing stretch had no events counted). With the app open the whole time, closing
+  and restarting the game loses nothing: no driving happens while it's closed.
 - Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` (newest 200).
 
 ## Safety events list

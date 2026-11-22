@@ -47,6 +47,11 @@ public sealed class TelemetryHub : IDisposable
     GPeaks _peaks;
     IReadOnlyList<AlertCard> _alerts = [];
     DriveScore _score;
+    int _savedRevision;
+    DateTime _savedAt;
+
+    /// <summary>The job in progress is saved on every change, and every so often while it's driven.</summary>
+    static readonly TimeSpan SaveEvery = TimeSpan.FromSeconds(30);
 
     public TelemetryHub(AppSettings settings, string? installDir)
     {
@@ -54,6 +59,9 @@ public sealed class TelemetryHub : IDisposable
         // Its own reader of the game's files: the UI thread reads them too, and an archive isn't thread-safe.
         _game = installDir is null ? null : new GameArchives(installDir);
         _vehicles = new VehicleKind(() => _game);
+        // The coach job that was in progress when the app last closed, held until the game sends it again.
+        if (settings.RecordCoachJobs && JobLog.LoadCurrent() is { } saved) Jobs.Restore(saved);
+        _savedRevision = Jobs.Revision;
         _thread = new Thread(Run) { IsBackground = true, Name = "ets2u telemetry", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
     }
@@ -146,6 +154,7 @@ public sealed class TelemetryHub : IDisposable
             try { JobFinished?.Invoke(finished); }
             catch (Exception ex) { AppDirs.Log("Job summary: " + ex); }
         }
+        if (recordJobs) SaveJob(now, force: false);
         _events.RemoveAll(e => e.Ended is { } end && now - end > Linger);
         var cards = _events.Count == 0
             ? []
@@ -163,10 +172,30 @@ public sealed class TelemetryHub : IDisposable
         }
     }
 
+    /// <summary>Saves the job in progress (or deletes the file once there's none), so it outlives the app.</summary>
+    void SaveJob(DateTime now, bool force)
+    {
+        var revision = Jobs.Revision;
+        var due = revision != _savedRevision || (Jobs.Active && !Jobs.Waiting && now - _savedAt >= SaveEvery);
+        if (!force && !due) return;
+        try
+        {
+            JobLog.SaveCurrent(Jobs.Current());
+            _savedRevision = revision;
+            _savedAt = now;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _savedAt = now; // try again later, not every frame
+            AppDirs.Log("Saving the job in progress: " + ex.Message);
+        }
+    }
+
     public void Dispose()
     {
         _stop = true;
         _thread.Join(TimeSpan.FromSeconds(2));
+        if (_settings.RecordCoachJobs && !_thread.IsAlive) SaveJob(DateTime.UtcNow, force: true);
         _telemetry.Dispose();
         _game?.Dispose();
     }

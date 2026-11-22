@@ -112,6 +112,8 @@ public sealed class TripRecorder
     readonly List<(DrivingEvent Event, bool Coach)> _events = new();
     /// <summary>Events taken off the list; one still going on would otherwise come back when it turns red.</summary>
     readonly HashSet<DrivingEvent> _removed = new(ReferenceEqualityComparer.Instance);
+    /// <summary>Events of a summary this trip carries on from (saved before the app was closed).</summary>
+    readonly List<TripEvent> _restored = new();
     DateTime _started;
     DateTime? _stopped;
     DateTime? _lastFrame;
@@ -131,12 +133,36 @@ public sealed class TripRecorder
         {
             _events.Clear();
             _removed.Clear();
+            _restored.Clear();
             _started = now;
             _stopped = null;
             _lastFrame = null;
             _driving = _realDriving = TimeSpan.Zero;
             _distanceKm = _realDistanceKm = _topKmh = 0;
             _coach = _truck = false;
+            _any = true;
+        }
+    }
+
+    /// <summary>Carries on from a summary saved earlier: its totals and events, still capturing.</summary>
+    public void Resume(TripSummary saved)
+    {
+        lock (_lock)
+        {
+            _events.Clear();
+            _removed.Clear();
+            _restored.Clear();
+            _restored.AddRange(saved.Events);
+            _started = saved.Started;
+            _stopped = null;
+            _lastFrame = null;
+            _driving = saved.DrivingTime;
+            _realDriving = saved.RealDrivingTime ?? saved.DrivingTime;
+            _distanceKm = saved.DistanceKm;
+            _realDistanceKm = saved.RealDistanceKm ?? saved.DistanceKm;
+            _topKmh = saved.TopKmh;
+            _coach = saved.InCoach;
+            _truck = saved.InTruck;
             _any = true;
         }
     }
@@ -187,6 +213,12 @@ public sealed class TripRecorder
     {
         lock (_lock)
         {
+            var r = _restored.FindIndex(e => e.Started == started && e.Kind == kind);
+            if (r >= 0)
+            {
+                _restored.RemoveAt(r);
+                return true;
+            }
             var i = _events.FindIndex(x => x.Event.Started == started && x.Event.Kind == kind);
             if (i < 0) return false;
             _removed.Add(_events[i].Event);
@@ -204,6 +236,7 @@ public sealed class TripRecorder
             var events = _events
                 .Select(x => new TripEvent(x.Event.Kind, x.Event.Level, x.Event.Started, x.Event.Ended, x.Event.Category,
                     x.Event.Variant, x.Event.Detail, x.Event.Peak, x.Event.StartKmh, x.Event.EndKmh, x.Coach))
+                .Concat(_restored)
                 .OrderBy(e => e.Started)
                 .ToList();
             return new TripSummary(_started, _stopped, _driving, _distanceKm, _topKmh, _coach, _truck, events, _realDriving, _realDistanceKm);

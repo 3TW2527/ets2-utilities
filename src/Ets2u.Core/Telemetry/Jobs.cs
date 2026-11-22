@@ -15,11 +15,16 @@ public enum JobOutcome { InProgress, Delivered, Cancelled, Ended, Failed }
 /// <param name="Job">The job's attributes as the game sends them (names as in the SCS SDK, e.g. source_city).</param>
 /// <param name="Result">The attributes of the delivered or cancelled event, if the game sent one.</param>
 /// <param name="ResultEvent">That event's id, e.g. "job.delivered".</param>
+/// <param name="AppClosed">The app was closed for part of the job, so the driving then isn't in the summary.</param>
 public sealed record JobSummary(
     DateTime Started, DateTime? Ended, JobKind Kind, JobOutcome Outcome,
     IReadOnlyDictionary<string, string> Job, IReadOnlyDictionary<string, string>? Result, string? ResultEvent,
-    TripSummary Trip)
+    TripSummary Trip, bool AppClosed = false)
 {
+    public const string AppClosedNote =
+        "The app was closed for part of this job, so the driving then isn't counted: its events are missing, " +
+        "and the distance and driving time are the game's own where it gave them.";
+
     /// <summary>"Praha → Brno" from the job's cities (or stops, companies), or "" when the game named none.</summary>
     [JsonIgnore]
     public string Route => JobText.Route(Job);
@@ -30,6 +35,7 @@ public sealed record JobSummary(
         var head = string.Create(c, $"Coach job, {Started.ToLocalTime():yyyy-MM-dd HH:mm}");
         if (Route.Length > 0) head += " · " + Route;
         var lines = new List<string> { head, "Result: " + JobText.Describe(Outcome, Result) };
+        if (AppClosed) lines.Add(AppClosedNote);
         lines.AddRange(Trip.ToText().Split(Environment.NewLine).Skip(1));
         return string.Join(Environment.NewLine, lines);
     }
@@ -111,6 +117,25 @@ public static class JobText
         return string.Join(" · ", parts);
     }
 
+    /// <summary>
+    /// Whether two job configurations are the same job: the game sends a job again when it starts or a
+    /// profile is loaded, and fills in arrival times as the job goes, so only what names the job counts
+    /// (its stops or cities, companies, cargo, pay, planned distance and market).
+    /// </summary>
+    public static bool SameIdentity(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b)
+    {
+        static bool Names(string key) =>
+            key is "income" or "planned_distance.km" or "bus_job.market" or "cargo" or "cargo.id"
+                or "source_city" or "destination_city" or "source_company" or "destination_company"
+            || key.StartsWith("source_stop.id", StringComparison.Ordinal)
+            || key.StartsWith("destination_stop.id", StringComparison.Ordinal);
+        var keys = a.Keys.Concat(b.Keys).Where(Names).Distinct().ToList();
+        return keys.Count > 0 && keys.All(k => a.GetValueOrDefault(k) == b.GetValueOrDefault(k));
+    }
+
+    public static double? Km(string? value) =>
+        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var km) && km > 0 ? km : null;
+
     static double? Number(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : null;
 
@@ -157,6 +182,12 @@ public static class JobText
 /// clears, or when another starts after a delivered or cancelled event. Each job gets its own trip
 /// summary. Only coach jobs are kept: the game's bus jobs, and any job driven only in a coach. Fed by the
 /// telemetry reader thread; <see cref="Current"/> is read by the UI. Thread-safe.
+///
+/// A job outlives the game and the app being closed. When the game starts, its plugin has sent no job yet
+/// (its job_seq is 0), and when the app starts it carries on from the job it saved (<see cref="Restore"/>):
+/// either way the job is held, <see cref="Waiting"/>, until the game sends one. The same job (by
+/// <see cref="JobText.SameIdentity"/>) carries on the same summary; another job, or the game saying there's
+/// none (or driving without one for a while), ends the held one.
 /// </summary>
 public sealed class JobTracker
 {
@@ -167,6 +198,38 @@ public sealed class JobTracker
     DateTime _started;
     (JobOutcome Outcome, string Id, Dictionary<string, string> Attributes)? _result;
     uint? _gameplaySeen;
+    bool _waiting, _appClosed;
+    DateTime? _noJobSince;
+
+    /// <summary>Driving this long with no job, while one is held, means it's gone.</summary>
+    static readonly TimeSpan NoJobGrace = TimeSpan.FromSeconds(10);
+
+    /// <summary>Goes up whenever the job, its events or its state change: the app saves the job then.</summary>
+    public int Revision { get; private set; }
+
+    /// <summary>A job is held until the game (restarted, or the app reopened) sends it again.</summary>
+    public bool Waiting
+    {
+        get { lock (_lock) return _trip is not null && _waiting; }
+    }
+
+    /// <summary>Carries on from a job saved while it was in progress, once the game sends it again.</summary>
+    public void Restore(JobSummary saved)
+    {
+        lock (_lock)
+        {
+            if (_trip is not null || saved.Outcome != JobOutcome.InProgress || saved.Kind == JobKind.None) return;
+            _trip = new TripRecorder();
+            _trip.Resume(saved.Trip);
+            _kind = saved.Kind;
+            _job = new Dictionary<string, string>(saved.Job);
+            _started = saved.Started;
+            _result = null;
+            _waiting = _appClosed = true;
+            _noJobSince = null;
+            Revision++;
+        }
+    }
 
     /// <summary>The job being driven, or null.</summary>
     public JobSummary? Current()
@@ -174,7 +237,7 @@ public sealed class JobTracker
         lock (_lock)
         {
             return _trip?.Snapshot() is { } trip
-                ? new JobSummary(_started, null, _kind, JobOutcome.InProgress, _job, _result?.Attributes, _result?.Id, trip)
+                ? new JobSummary(_started, null, _kind, JobOutcome.InProgress, _job, _result?.Attributes, _result?.Id, trip, _appClosed)
                 : null;
         }
     }
@@ -182,7 +245,12 @@ public sealed class JobTracker
     /// <summary>Takes an event off the job being driven.</summary>
     public bool RemoveEvent(DateTime started, DrivingEventKind kind)
     {
-        lock (_lock) return _trip?.Remove(started, kind) == true;
+        lock (_lock)
+        {
+            if (_trip?.Remove(started, kind) != true) return false;
+            Revision++;
+            return true;
+        }
     }
 
     public bool Active
@@ -218,16 +286,48 @@ public sealed class JobTracker
                 {
                     var kind = f.JobKind switch { 1 => JobKind.Truck, 2 => JobKind.Bus, _ => JobKind.None };
                     var job = kind == JobKind.None ? new Dictionary<string, string>() : JobText.Parse(f.JobInfo);
-                    var changed = kind != _kind || !SameJob(job, _job);
-                    if (_trip is not null && (kind == JobKind.None || kind != _kind || (changed && _result is not null)))
-                        finished = Finish(now);
-                    if (_trip is null && kind != JobKind.None)
-                        Begin(now, kind, job);
-                    else if (_trip is not null)
-                        _job = job; // the same job, updated (e.g. cargo loaded)
+                    if (_trip is not null && f.JobSeq == 0)
+                    {
+                        // The game has just started: it hasn't sent the job yet.
+                        if (!_waiting) Revision++;
+                        _waiting = true;
+                    }
+                    else if (_trip is not null && _waiting)
+                    {
+                        if (kind != JobKind.None && kind == _kind && JobText.SameIdentity(job, _job))
+                        {
+                            _waiting = false;
+                            _noJobSince = null;
+                            _job = job;
+                            Revision++;
+                        }
+                        else if (kind != JobKind.None)
+                        {
+                            finished = Finish(now);
+                            Begin(now, kind, job);
+                        }
+                        else if (speedMs is not null && (_noJobSince ??= now) is var since && now - since >= NoJobGrace)
+                        {
+                            finished = Finish(now); // driving with no job: it was finished or given up meanwhile
+                        }
+                    }
+                    else
+                    {
+                        var changed = kind != _kind || !SameJob(job, _job);
+                        if (_trip is not null && (kind == JobKind.None || kind != _kind || (changed && _result is not null)))
+                            finished = Finish(now);
+                        if (_trip is null && kind != JobKind.None)
+                            Begin(now, kind, job);
+                        else if (_trip is not null)
+                            _job = job; // the same job, updated (e.g. cargo loaded)
+                    }
                 }
             }
-            _trip?.Step(now, speedMs, coach, news, scale);
+            // A held job isn't being driven: it may not even be loaded.
+            if (_waiting) return finished;
+            var newsList = news as IReadOnlyCollection<DrivingEvent> ?? news.ToList();
+            if (_trip is not null && newsList.Count > 0) Revision++;
+            _trip?.Step(now, speedMs, coach, newsList, scale);
             return finished;
         }
     }
@@ -243,6 +343,9 @@ public sealed class JobTracker
         _job = job;
         _started = now;
         _result = null;
+        _waiting = _appClosed = false;
+        _noJobSince = null;
+        Revision++;
     }
 
     JobSummary? Finish(DateTime now)
@@ -251,8 +354,20 @@ public sealed class JobTracker
         trip.Stop(now);
         _trip = null;
         var summary = trip.Snapshot()!;
-        var job = new JobSummary(_started, now, _kind, _result?.Outcome ?? JobOutcome.Ended, _job, _result?.Attributes, _result?.Id, summary);
+        // With a gap in the driving, the game's own distance for the job is the better one, and the
+        // driving time is stretched to match.
+        if (_appClosed && JobText.Km(_result?.Attributes.GetValueOrDefault("distance.km")) is { } km && km > summary.DistanceKm * 1.02)
+            summary = summary with
+            {
+                DrivingTime = summary.DistanceKm >= 0.1 ? summary.DrivingTime * (km / summary.DistanceKm) : summary.DrivingTime,
+                DistanceKm = km,
+            };
+        var job = new JobSummary(_started, now, _kind, _result?.Outcome ?? JobOutcome.Ended, _job, _result?.Attributes, _result?.Id,
+            summary, _appClosed);
         _result = null;
+        _waiting = _appClosed = false;
+        _noJobSince = null;
+        Revision++;
         var isCoach = _kind == JobKind.Bus || (summary.InCoach && !summary.InTruck);
         // A job that was never driven (a profile loaded and left) isn't worth a summary.
         var driven = summary.DrivingTime > TimeSpan.Zero || job.Outcome != JobOutcome.Ended;
@@ -312,8 +427,39 @@ public static class JobLog
         };
     }
 
-    static double? Km(string? value) =>
-        double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var km) && km > 0 ? km : null;
+    static double? Km(string? value) => JobText.Km(value);
+
+    /// <summary>The job in progress, saved so it outlives the app: %APPDATA%\ets2u\coach_job_current.json.</summary>
+    public static string CurrentPath => Path.Combine(AppDirs.Settings, "coach_job_current.json");
+
+    /// <summary>Saves the job in progress, or deletes the file when there's none.</summary>
+    public static void SaveCurrent(JobSummary? job, string? path = null)
+    {
+        path ??= CurrentPath;
+        if (job is null)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            return;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(job, Json));
+        File.Move(temp, path, overwrite: true);
+    }
+
+    public static JobSummary? LoadCurrent(string? path = null)
+    {
+        path ??= CurrentPath;
+        try
+        {
+            return File.Exists(path) ? JsonSerializer.Deserialize<JobSummary>(File.ReadAllText(path), Json) : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException)
+        {
+            AppDirs.Log("coach_job_current.json: " + ex.Message);
+            return null;
+        }
+    }
 
     public static void Save(IEnumerable<JobSummary> jobs, string? path = null)
     {
