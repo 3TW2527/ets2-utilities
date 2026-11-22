@@ -287,7 +287,7 @@
                         <CheckBox x:Name="CoachJobFailureBox" Content="Extreme g-force no longer fails the job" Margin="0,10,0,0"/>
                         <CheckBox x:Name="CoachFullBox" Content="Passengers board fully satisfied" Margin="0,6,0,0"/>
                         <TextBlock Style="{StaticResource Note}"
-                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The game's g-force meter can be hidden on the HUD page. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
+                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The game's g-force meter can be hidden with the game's own switch in its options. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyCoach_Click" HorizontalAlignment="Left"/>
@@ -313,10 +313,8 @@
                             <RadioButton x:Name="MapRight" Content="Always bottom-right" Margin="0,2"/>
                         </StackPanel>
 
-                        <TextBlock Style="{StaticResource H}" Text="Coach g-force meter"/>
-                        <CheckBox x:Name="HideGMeterBox" Content="Hide the game's g-force meter on the route advisor (coaches)" Margin="0,2,0,0"/>
-                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="Only the dial and its needle go: passengers still react to g-forces as set on the Coach passengers page, and the satisfaction icon stays. The plugin's own live g-force meter (Driving alerts page) is separate. This replaces the game's ui/adviser_center.sii and ui/template/text.mod_bus.sii, so another mod that changes those (a route advisor mod) can't be used with it."/>
+                        <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
+                                   Text="To hide the coaches' g-force meter on the route advisor, use the game's own switch in its options; no mod is needed."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyHud_Click" HorizontalAlignment="Left"/>
@@ -706,7 +704,7 @@
                         <CheckBox x:Name="AlertCardsBox" Margin="20,2,0,0"
                                   Content="Cards at the top of the screen, with what happened and the peak g-force"/>
                         <CheckBox x:Name="TrafficLightBox" Margin="20,4,0,0"
-                                  Content="A traffic light: green, yellow and red lamps in a row, green while you drive smoothly"/>
+                                  Content="A traffic light: green, yellow and red lamps in a row that flash on an event and stay lit for the recent driving"/>
                         <Grid Margin="40,4,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="50"/>
@@ -723,8 +721,13 @@
                             <TextBlock Grid.Column="4" Margin="8,0,0,0" VerticalAlignment="Center"
                                        Text="{Binding Value, ElementName=TrafficLightScaleSlider, StringFormat=x{0:0.0}}"/>
                         </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="40,4,0,0">
+                            <TextBlock Text="Between events, show how the last" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="TrafficLightMinutesBox" Width="60" Margin="6,0"/>
+                            <TextBlock Text="minutes of driving went" VerticalAlignment="Center"/>
+                        </StackPanel>
                         <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). The light stays yellow or red as long as a card would, and is hidden while the game is paused."/>
+                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). An event flashes the light yellow or red for as long as a card would show. Between events one lamp stays lit for the recent driving, scored like the trip summary (yellow events + 2 x red, per 10 game hours): green under 20, yellow under 40, red from 40. Too many events keep it yellow or red until they fall out of those last minutes. Only time spent moving counts, and the light is hidden while the game is paused."/>
                         <CheckBox x:Name="GMeterBox" Margin="0,10,0,0" Click="GMeter_Click" FontWeight="SemiBold"
                                   Content="Show the live g-force meter (now and peak in each direction, coloured by these thresholds)"/>
                         <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"

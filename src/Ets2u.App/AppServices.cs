@@ -127,12 +127,10 @@ public sealed class AppServices
         Writer.Write("Rebuild mods: " + string.Join(", ", changed.Keys.Select(Path.GetFileName)), changed, old);
         Changed?.Invoke();
         var message = changed.Count == 0 ? "" : $"Updated {string.Join(", ", changed.Keys.Select(Path.GetFileName))}. ";
-        if (Settings.GMeterMoved)
+        if (Settings.GMeterDropped)
         {
-            Settings.GMeterMoved = false;
-            if (ModStatus.ActiveIn(Profiles, Mine(HudMod.Mod)).Count == 0)
-                message += $"Hiding the g-force meter moved from the Coach comfort mod to the HUD mod: enable \"{HudMod.Mod.DisplayName}\" " +
-                           "in Mod Manager, or the meter comes back. ";
+            Settings.GMeterDropped = false;
+            message += "The mods no longer hide the coaches' g-force meter: the game has its own switch for it in its options. ";
         }
         if (old.Count > 0)
             message += $"Removed the old {string.Join(", ", old.Select(Path.GetFileName))}: the mods have new file names, " +

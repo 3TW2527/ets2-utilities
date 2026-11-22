@@ -31,7 +31,7 @@ public static class GeneratedMods
         var limits = CoachLimits(s);
         if (s.CoachIgnored != CoachFactor.None || s.CoachFullSatisfaction || limits is not null || exists(CoachComfort.Mod))
             mods[Name(CoachComfort.Mod)] = CoachComfort.BuildMod(game.Read(CoachComfort.GamePath), s.CoachIgnored, s.CoachFullSatisfaction, limits);
-        if (s.MapPositionEnabled || s.HideGMeter || exists(HudMod.Mod))
+        if (s.MapPositionEnabled || exists(HudMod.Mod))
             mods[Name(HudMod.Mod)] = HudMod.BuildMod(game, s);
         // The display template is in dlc_bus.scs, so this needs the coaches DLC.
         if ((s.BusDisplay.Enabled || exists(BusDisplay.Mod)) && game.TryRead(BusDisplay.GamePath) is { } template)

@@ -289,9 +289,19 @@ public sealed class DrivingEventDetector
     }
 }
 
+/// <summary>What the traffic light shows: one lamp (null is green), flashing while it stands for an event.</summary>
+public readonly record struct LightState(AlertLevel? Level, bool Flashing);
+
 /// <summary>The traffic light's state for the alerts on screen.</summary>
 public static class AlertLight
 {
+    /// <summary>
+    /// An event on screen (going on, or in the seconds after it a card would stay) flashes its lamp, the
+    /// worst one when there are several; otherwise the light shows the recent driving's band, steady.
+    /// </summary>
+    public static LightState Show(IReadOnlyCollection<AlertLevel> alerts, AlertLevel? steady) =>
+        alerts.Count > 0 ? new(For(alerts), true) : new(steady, false);
+
     /// <summary>The worst level among the alerts, or null (green) when there are none.</summary>
     public static AlertLevel? For(IEnumerable<AlertLevel> alerts)
     {

@@ -6,7 +6,6 @@ using Ets2u.Core.Mods;
 using Ets2u.Core.Paths;
 using Ets2u.Core.Sii;
 using Ets2u.Core.Telemetry;
-using Xunit.Abstractions;
 
 namespace Ets2u.Core.Tests;
 
@@ -283,113 +282,152 @@ public class JobTrackerTests
         Assert.Equal(48 + 64 + 8 + 1024 + 4 + 2048 + 4, Marshal.SizeOf<TelemetryFrame>());
 }
 
-public class GMeterTests(ITestOutputHelper output)
+public class GMeterTests
 {
-    const string Center =
-        "SiiNunit\n{\nui::group : _nameless._.gmeter {\n fitting: false\n my_children: 2\n}\n\n" +
-        "ui::text : _nameless._.gmeter.range {\n text: \"<img src=/material/ui/adviser/g_force.mat>\"\n id: 1010\n}\n\n" +
-        "ui::text : _nameless._.other {\n text: \"<img src=/material/ui/adviser/other.mat>\"\n}\n}\n";
-
-    const string Templates =
-        "SiiNunit\n{\nui::text_template : txt.hud.bus_job.satisfaction\n{\n\ttext: \"<img src=/material/ui/adviser/g_force_pointer.mat color=%0>\"\n}\n\n" +
-        "ui::text_template : txt.hud.bus_gmeter.pointer\n{\n\tname: \"HUD bus G-meter pointer\"\n" +
-        "\ttext: \"<img src=/material/ui/adviser/g_force_pointer.mat color=%0>\"\n}\n\n}\n";
-
     [Fact]
-    public void EmptiesOnlyTheMetersPicturesAndNeedle()
+    public void TheHudModNoLongerShipsTheMeterFiles()
     {
         var game = new InMemoryGameFiles(new Dictionary<string, byte[]>
         {
-            ["ui/adviser_center.sii"] = Encoding.UTF8.GetBytes(Center),
-            ["ui/template/text.mod_bus.sii"] = Encoding.UTF8.GetBytes(Templates),
-        });
-        var files = HudMod.HideGMeter(game);
-        Assert.Equal(["ui/adviser_center.sii", "ui/template/text.mod_bus.sii"], files.Keys.Order());
-        var center = SiiDocument.Parse(files["ui/adviser_center.sii"]);
-        Assert.Equal("\"\"", center.GetValue(center.Units.First(u => u.Name == "_nameless._.gmeter.range"), "text"));
-        Assert.Contains("other.mat", center.GetValue(center.Units.First(u => u.Name == "_nameless._.other"), "text"));
-        var templates = SiiDocument.Parse(files["ui/template/text.mod_bus.sii"]);
-        Assert.Equal("\"\"", templates.GetValue(templates.Units.First(u => u.Name == "txt.hud.bus_gmeter.pointer"), "text"));
-        // The satisfaction icon uses the same picture and stays.
-        Assert.Contains("g_force_pointer", templates.GetValue(templates.Units.First(u => u.Name == "txt.hud.bus_job.satisfaction"), "text"));
-    }
-
-    [Fact]
-    public void FailsWhenTheGameHasNoMeter() =>
-        Assert.Throws<FormatException>(() => HudMod.HideGMeter(new InMemoryGameFiles(new Dictionary<string, byte[]>())));
-
-    [Fact]
-    public void TheHudModShipsTheMeterFilesOnlyWhenAsked()
-    {
-        var stock = Encoding.UTF8.GetBytes("SiiNunit\n{\nbus_economy_data : bus_economy.data\n{\n\tsatisfaction_late_penalty: (0.05, 0.13)\n}\n}\n");
-        var game = new InMemoryGameFiles(new Dictionary<string, byte[]>
-        {
-            [CoachComfort.GamePath] = stock,
             ["ui/adviser.sii"] = Encoding.UTF8.GetBytes("SiiNunit\n{\n}\n"),
-            ["ui/adviser_center.sii"] = Encoding.UTF8.GetBytes(Center),
-            ["ui/template/text.mod_bus.sii"] = Encoding.UTF8.GetBytes(Templates),
+            ["ui/adviser_center.sii"] = Encoding.UTF8.GetBytes("SiiNunit\n{\n}\n"),
+            ["ui/template/text.mod_bus.sii"] = Encoding.UTF8.GetBytes("SiiNunit\n{\n}\n"),
         });
         static IReadOnlyList<string> Entries(byte[] zip)
         {
             using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
             return archive.Entries.Select(e => e.FullName).ToList();
         }
-        bool Built(ModSpec m) => m == HudMod.Mod || m == CoachComfort.Mod;
-        var off = GeneratedMods.Build(game, new AppSettings { HideGMeter = false, ModTag = "abcdef" }, Built);
-        Assert.DoesNotContain("ui/adviser_center.sii", Entries(off["ets2u_ui_abcdef.scs"]));
-        var on = GeneratedMods.Build(game, new AppSettings { HideGMeter = true, ModTag = "abcdef" }, Built);
-        Assert.Contains("ui/adviser_center.sii", Entries(on["ets2u_ui_abcdef.scs"]));
-        Assert.Contains("ui/template/text.mod_bus.sii", Entries(on["ets2u_ui_abcdef.scs"]));
-        Assert.Contains("ui/adviser.sii", Entries(on["ets2u_ui_abcdef.scs"]));
-        // The coach mod has only the passengers' file now.
-        Assert.Equal(["def/bus_economy_data.sii", "description.txt", "manifest.sii", "mod_icon.jpg"], Entries(on["ets2u_coach_abcdef.scs"]).Order());
-        // Hiding the meter alone is enough to make the HUD mod.
-        var fresh = GeneratedMods.Build(game, new AppSettings { HideGMeter = true, ModTag = "abcdef" }, _ => false);
-        Assert.Equal(["ets2u_ui_abcdef.scs"], fresh.Keys);
-        Assert.Equal("ETS2 Utilities: HUD", HudMod.Mod.DisplayName);
-        Assert.Equal("ets2u_ui_abcdef.scs", GeneratedMods.ForPlayer(HudMod.Mod, new AppSettings { ModTag = "abcdef" }).FileName);
+        var mods = GeneratedMods.Build(game, new AppSettings { ModTag = "abcdef" }, m => m == HudMod.Mod);
+        Assert.Equal(["description.txt", "manifest.sii", "mod_icon.jpg", "ui/adviser.sii"], Entries(mods["ets2u_ui_abcdef.scs"]).Order());
+        // Nobody asked for a HUD mod: none is made.
+        Assert.Empty(GeneratedMods.Build(game, new AppSettings { ModTag = "abcdef" }, _ => false));
     }
 
-    [Fact]
-    public void TheSwitchFromTheCoachModCarriesOver()
+    [Theory]
+    [InlineData("{ \"HideGMeter\": true, \"ModTag\": \"abcdef\" }", true)]
+    [InlineData("{ \"CoachHideGMeter\": true, \"ModTag\": \"abcdef\" }", true)]
+    [InlineData("{ \"HideGMeter\": false, \"ModTag\": \"abcdef\" }", false)]
+    public void AnOldSwitchIsDroppedAndSaidOnce(string json, bool said)
     {
         var path = Path.Combine(Path.GetTempPath(), $"ets2u_settings_{Guid.NewGuid():N}.json");
         try
         {
-            File.WriteAllText(path, "{ \"CoachHideGMeter\": true, \"ModTag\": \"abcdef\" }");
+            File.WriteAllText(path, json);
             var s = AppSettings.Load(path);
-            Assert.True(s.HideGMeter);
-            Assert.True(s.GMeterMoved);
+            Assert.Equal(said, s.GMeterDropped);
             s.Save(path);
-            Assert.DoesNotContain("CoachHideGMeter", File.ReadAllText(path));
-            var again = AppSettings.Load(path);
-            Assert.True(again.HideGMeter);
-            Assert.False(again.GMeterMoved); // said once
+            Assert.DoesNotContain("GMeter", File.ReadAllText(path));
+            Assert.False(AppSettings.Load(path).GMeterDropped);
         }
         finally
         {
             File.Delete(path);
         }
     }
+}
 
-    /// <summary>The installed game's files (run with ETS2U_LOCAL=1); reads only.</summary>
+public class DriveStatusTests
+{
+    static readonly DateTime T0 = new(2026, 11, 22, 10, 0, 0, DateTimeKind.Utc);
+
     [Fact]
-    public void HidesTheInstalledGamesMeter()
+    public void AnEventFlashesItsLampAndOtherwiseTheRecentDrivingShowsSteady()
     {
-        if (Environment.GetEnvironmentVariable("ETS2U_LOCAL") != "1") return;
-        var paths = GamePaths.Detect();
-        using var game = new GameArchives(paths.InstallDir!);
-        var files = HudMod.HideGMeter(game);
-        foreach (var (path, bytes) in files)
+        Assert.Equal(new LightState(AlertLevel.Yellow, true), AlertLight.Show([AlertLevel.Yellow], null));
+        Assert.Equal(new LightState(AlertLevel.Red, true), AlertLight.Show([AlertLevel.Yellow, AlertLevel.Red], AlertLevel.Yellow));
+        // An event flashes yellow even over a red stretch.
+        Assert.Equal(new LightState(AlertLevel.Yellow, true), AlertLight.Show([AlertLevel.Yellow], AlertLevel.Red));
+        Assert.Equal(new LightState(null, false), AlertLight.Show([], null));
+        Assert.Equal(new LightState(AlertLevel.Red, false), AlertLight.Show([], AlertLevel.Red));
+    }
+
+    /// <summary>Drives in 100 ms frames at the given time scale.</summary>
+    static void Drive(DriveStatus status, ref DateTime now, TimeSpan time, double scale = 19, float speedMs = 20)
+    {
+        for (var t = TimeSpan.Zero; t < time; t += TimeSpan.FromMilliseconds(100))
         {
-            var before = Encoding.UTF8.GetString(game.Read(path)).Replace("\r\n", "\n").Split('\n');
-            var after = Encoding.UTF8.GetString(bytes).Replace("\r\n", "\n").Split('\n');
-            Assert.Equal(before.Length, after.Length);
-            var changed = before.Zip(after).Where(p => p.First != p.Second).ToList();
-            output.WriteLine($"{path}: {changed.Count} line(s) changed");
-            foreach (var (b, a) in changed) output.WriteLine($"  {b.Trim()}  ->  {a.Trim()}");
-            Assert.InRange(changed.Count, 1, 2);
+            now += TimeSpan.FromMilliseconds(100);
+            status.Step(now, speedMs, scale, []);
         }
-        Assert.Equal(3, files.Count);
+    }
+
+    static void Event(DriveStatus status, DateTime now, AlertLevel level)
+    {
+        var e = new DrivingEvent { Kind = DrivingEventKind.Braking, Started = now };
+        typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Level))!.SetValue(e, level);
+        status.Step(now, 20, 19, [e]);
+        typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Ended))!.SetValue(e, now);
+    }
+
+    [Fact]
+    public void OneEventEarlyOnStaysGreenButARunOfThemDoesnt()
+    {
+        var status = new DriveStatus();
+        var now = T0;
+        Drive(status, ref now, TimeSpan.FromMinutes(1));
+        Event(status, now, AlertLevel.Yellow);
+        // Taken over the 2-hour floor: 1 point scores 5.
+        Assert.Equal(5, status.Current.Score, 3);
+        Assert.Null(status.Current.Level);
+        for (var i = 0; i < 3; i++) Event(status, now, AlertLevel.Yellow);
+        Assert.Equal(AlertLevel.Yellow, status.Current.Level); // 4 points
+        for (var i = 0; i < 2; i++) Event(status, now, AlertLevel.Red);
+        Assert.Equal(AlertLevel.Red, status.Current.Level); // 8 points
+    }
+
+    [Fact]
+    public void AYellowThatTurnsRedCountsTwoInAll()
+    {
+        var detector = new DrivingEventDetector { Speeding = false };
+        var status = new DriveStatus();
+        var now = T0;
+        // Coach defaults: yellow from 0.35 g, red from 0.7 g.
+        foreach (var g in new[] { 0f, 0.4f, 0.5f, 0.8f, 0.8f, 0f })
+        {
+            now += TimeSpan.FromMilliseconds(100);
+            status.Step(now, 20, 19, detector.Update(now, -g, 0, 20, 0));
+        }
+        Assert.Equal(2 / DriveStatus.MinGameHours * 10, status.Current.Score, 3);
+    }
+
+    [Fact]
+    public void EventsRollOutOfTheWindowAsYouDrive()
+    {
+        var status = new DriveStatus { Window = TimeSpan.FromMinutes(30) };
+        var now = T0;
+        Drive(status, ref now, TimeSpan.FromMinutes(10));
+        for (var i = 0; i < 30; i++) Event(status, now, AlertLevel.Yellow);
+        // 30 points over 10 real minutes at x19 (about 3.2 game hours): red.
+        Assert.Equal(AlertLevel.Red, status.Current.Level);
+
+        // Clean driving dilutes it: once the window holds 30 minutes (9.5 game hours), 30 points scores about 32.
+        Drive(status, ref now, TimeSpan.FromMinutes(20));
+        Assert.Equal(AlertLevel.Yellow, status.Current.Level);
+        Assert.InRange(status.Current.Covered.TotalMinutes, 29.5, 30.5);
+
+        // Then the events fall out of the window behind you.
+        Drive(status, ref now, TimeSpan.FromMinutes(11));
+        Assert.Equal(0, status.Current.Score);
+        Assert.Null(status.Current.Level);
+        Assert.InRange(status.Current.Covered.TotalMinutes, 29.5, 30.5);
+    }
+
+    [Fact]
+    public void StandingStillOrPausedDoesntAgeTheWindow()
+    {
+        var status = new DriveStatus { Window = TimeSpan.FromMinutes(15) };
+        var now = T0;
+        Drive(status, ref now, TimeSpan.FromMinutes(5));
+        for (var i = 0; i < 10; i++) Event(status, now, AlertLevel.Red);
+        var before = status.Current;
+        Drive(status, ref now, TimeSpan.FromMinutes(30), speedMs: 0); // a break at a stop
+        for (var i = 0; i < 100; i++)
+        {
+            now += TimeSpan.FromSeconds(1);
+            status.Step(now, null, 19, []); // paused
+        }
+        Assert.Equal(before, status.Current);
+        Assert.Equal(AlertLevel.Red, status.Current.Level);
     }
 }

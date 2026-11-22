@@ -28,6 +28,7 @@ public sealed class TelemetryHub : IDisposable
     readonly LiveTelemetry _telemetry = new();
     readonly DrivingEventDetector _detector = new();
     readonly List<DrivingEvent> _events = new();
+    readonly DriveStatus _status = new();
 
     /// <summary>The trip being captured for the Trip summary page (started and stopped by a button).</summary>
     public TripRecorder Trip { get; } = new();
@@ -45,6 +46,7 @@ public sealed class TelemetryHub : IDisposable
     bool _coach;
     GPeaks _peaks;
     IReadOnlyList<AlertCard> _alerts = [];
+    DriveScore _score;
 
     public TelemetryHub(AppSettings settings, string? installDir)
     {
@@ -75,6 +77,12 @@ public sealed class TelemetryHub : IDisposable
     public IReadOnlyList<AlertCard> Alerts
     {
         get { lock (_lock) return _alerts; }
+    }
+
+    /// <summary>The recent driving's safety score, for the traffic light's steady colour.</summary>
+    public DriveScore Score
+    {
+        get { lock (_lock) return _score; }
     }
 
     public DrivingThresholds ThresholdsFor(bool coach) =>
@@ -109,6 +117,7 @@ public sealed class TelemetryHub : IDisposable
         // A job's summary counts events like a trip does, alerts or not.
         var capturing = Trip.Capturing || (recordJobs && Jobs.Active);
         IReadOnlyList<DrivingEvent> news = [];
+        List<DrivingEvent> shown = [];
         if (frame is { } f && (alerts || capturing))
         {
             // A trip counts speeding even when its alert cards are off.
@@ -117,13 +126,20 @@ public sealed class TelemetryHub : IDisposable
             news = _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs);
             if (alerts)
                 foreach (var e in news)
-                    if (!_events.Contains(e) && (e.Kind != DrivingEventKind.Speeding || _settings.SpeedingAlerts)) _events.Add(e);
+                    if (e.Kind != DrivingEventKind.Speeding || _settings.SpeedingAlerts)
+                    {
+                        shown.Add(e);
+                        if (!_events.Contains(e)) _events.Add(e);
+                    }
         }
         else
         {
             _detector.Reset(now);
         }
         var scale = (frame ?? raw)?.Scale ?? 1;
+        // The light's score counts what the alerts show, and only while they're on for this vehicle.
+        _status.Window = TimeSpan.FromMinutes(Math.Clamp(_settings.TrafficLightMinutes, 5, 120));
+        _status.Step(now, alerts ? frame?.SpeedMs : null, scale, shown);
         Trip.Step(now, frame?.SpeedMs, coach, news, scale);
         if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished)
         {
@@ -140,6 +156,7 @@ public sealed class TelemetryHub : IDisposable
             _frame = frame;
             _coach = coach;
             _alerts = cards;
+            _score = _status.Current;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));

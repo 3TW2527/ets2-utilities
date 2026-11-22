@@ -5,7 +5,8 @@ using Ets2u.Core.Sii;
 namespace Ets2u.Core.Features;
 
 /// <summary>
-/// The HUD mod: moves the route advisor map, and can hide the coaches' g-force meter.
+/// The HUD mod: moves the route advisor map. (0.12.0 to 0.12.2 could also hide the coaches' g-force
+/// meter; the game has its own switch for that, so the mod no longer touches those files.)
 ///
 /// The map is moved by overriding ui/adviser.sii. Each HUD block there has a
 /// "standard" layout (left-hand-drive trucks: map bottom-right) and a "uk" layout
@@ -66,10 +67,7 @@ public static class HudMod
         return doc.ToBytes();
     }
 
-    /// <summary>
-    /// The mod: the adviser script with the map moved (stock when that's off), and the g-force meter's
-    /// files when it's hidden (left out otherwise, so the game's own are used).
-    /// </summary>
+    /// <summary>The mod: the adviser script with the map moved (stock when that's off).</summary>
     public static byte[] BuildMod(IGameFiles game, AppSettings settings)
     {
         var files = new Dictionary<string, byte[]>();
@@ -79,51 +77,8 @@ public static class HudMod
             files[path] = settings.MapPositionEnabled ? Build(stock, settings.MapSide) : stock;
         }
         if (files.Count == 0) throw new FileNotFoundException("The route advisor script isn't in the game's archives.");
-        if (settings.HideGMeter)
-            foreach (var (path, bytes) in HideGMeter(game)) files[path] = bytes;
         return ScsModBuilder.Build(Mod, files);
     }
-
-    // ---------- the HUD's g-force meter ----------
-
-    /// <summary>
-    /// The coach's g-force meter is the "gmeter" group of the route advisor's centre block: a dial picture
-    /// (gmeter.range, and in VR a dark disc behind it, gmeter.background) and a needle the game moves,
-    /// drawn through the text template txt.hud.bus_gmeter.pointer.
-    /// </summary>
-    public static readonly string[] GMeterLayouts = ["ui/adviser_center.sii", "ui/adviser_gps_oculus.sii"];
-    public const string GMeterTemplates = "ui/template/text.mod_bus.sii";
-    const string PointerTemplate = "txt.hud.bus_gmeter.pointer";
-    static readonly string[] GMeterPictures = ["_nameless._.gmeter.range", "_nameless._.gmeter.background"];
-
-    /// <summary>
-    /// Copies of the game's files with the meter's pictures and needle emptied, so nothing is drawn. The
-    /// meter's place stays, so the rest of the route advisor doesn't move. Files the game doesn't have
-    /// (an older version) are left out; throws when none of them can be changed.
-    /// </summary>
-    public static Dictionary<string, byte[]> HideGMeter(IGameFiles game)
-    {
-        var files = new Dictionary<string, byte[]>();
-        foreach (var path in GMeterLayouts)
-        {
-            if (game.TryRead(path) is not { } stock) continue;
-            var doc = SiiDocument.Parse(stock);
-            var changed = 0;
-            foreach (var unit in doc.Units.Where(u => GMeterPictures.Contains(u.Name)))
-                if (doc.SetValue(unit, "text", "\"\"")) changed++;
-            if (changed > 0) files[path] = doc.ToBytes();
-        }
-        if (game.TryRead(GMeterTemplates) is { } templates)
-        {
-            var doc = SiiDocument.Parse(templates);
-            if (doc.Units.FirstOrDefault(u => u.Name == PointerTemplate) is { } unit && doc.SetValue(unit, "text", "\"\""))
-                files[GMeterTemplates] = doc.ToBytes();
-        }
-        if (files.Count == 0)
-            throw new FormatException("The route advisor's g-force meter wasn't found in the game's files: the game changed, so it can't be hidden.");
-        return files;
-    }
-
 
     public static string DescribeMapSupport(IGameFiles game) =>
         game.TryRead(GamePaths[0]) is null

@@ -395,7 +395,6 @@ public partial class MainWindow : Window
         MapSwap.IsChecked = s.MapSide == MapSide.Swap;
         MapLeft.IsChecked = s.MapSide == MapSide.Left;
         MapRight.IsChecked = s.MapSide == MapSide.Right;
-        HideGMeterBox.IsChecked = s.HideGMeter;
         MapNote.Text = _app.Game is null ? "ETS2 wasn't found." : HudMod.DescribeMapSupport(_app.Game);
         HudStatus.Text = DescribeMod(HudMod.Mod);
 
@@ -425,7 +424,6 @@ public partial class MainWindow : Window
     {
         _app.Settings.MapPositionEnabled = MapBox.IsChecked == true;
         _app.Settings.MapSide = MapLeft.IsChecked == true ? MapSide.Left : MapRight.IsChecked == true ? MapSide.Right : MapSide.Swap;
-        _app.Settings.HideGMeter = HideGMeterBox.IsChecked == true;
         return _app.ApplyMods();
     });
 
@@ -442,6 +440,8 @@ public partial class MainWindow : Window
     });
 
     SpeedOverlay? _overlay;
+
+    static readonly int[] LightMinutes = [15, 30, 60];
 
     static readonly Dictionary<OverlayCorner, string> CornerNames = new()
     {
@@ -600,6 +600,8 @@ public partial class MainWindow : Window
         TrafficLightCornerBox.SelectedValuePath = "Key";
         TrafficLightCornerBox.SelectedValue = s.TrafficLightCorner;
         TrafficLightScaleSlider.Value = s.TrafficLightScale;
+        TrafficLightMinutesBox.ItemsSource = LightMinutes;
+        TrafficLightMinutesBox.SelectedItem = LightMinutes.Contains(s.TrafficLightMinutes) ? s.TrafficLightMinutes : 30;
         AlertsStatus.Text = DescribeAlerts(s);
     }
 
@@ -680,6 +682,7 @@ public partial class MainWindow : Window
         s.TrafficLight = TrafficLightBox.IsChecked == true;
         s.TrafficLightCorner = TrafficLightCornerBox.SelectedValue is OverlayCorner corner ? corner : OverlayCorner.TopCenter;
         s.TrafficLightScale = Math.Round(TrafficLightScaleSlider.Value, 1);
+        s.TrafficLightMinutes = TrafficLightMinutesBox.SelectedItem is int minutes ? minutes : 30;
         s.Save();
         UpdateOverlay();
         return DescribeAlerts(s);

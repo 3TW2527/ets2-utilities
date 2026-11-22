@@ -8,9 +8,11 @@ namespace Ets2u.App;
 
 /// <summary>
 /// The alerts as a GreenRoad-style light bar: green, yellow and red lamps in a row, green on the left.
-/// Green is lit while the driving is smooth; yellow or red while an event of that level is on, and for
-/// the same few seconds after it as the cards. Click-through; hidden while the game is paused or closed,
-/// and in a vehicle whose alerts are off.
+/// It shows two things. An event flashes its lamp (yellow or red) while it's on and for the same few
+/// seconds after it as a card. Between events one lamp stays lit, steady, for how the recent driving has
+/// gone: the safety score of the last 15, 30 or 60 minutes of driving (<see cref="DriveStatus"/>), so too
+/// many events keep it yellow or red until they roll out of that window. Click-through; hidden while the
+/// game is paused or closed, and in a vehicle whose alerts are off.
 /// </summary>
 public partial class TrafficLightOverlay : Window
 {
@@ -18,10 +20,12 @@ public partial class TrafficLightOverlay : Window
     static readonly Brush GreenOff = Frozen(0x2E, 0xC4, 0x5B, 0x38), YellowOff = Frozen(0xF2, 0xB7, 0x05, 0x38), RedOff = Frozen(0xE0, 0x3A, 0x2F, 0x38);
 
     readonly TelemetryHub _hub;
-    readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    /// <summary>A flashing lamp is on this long, then off this long.</summary>
+    static readonly TimeSpan FlashHalf = TimeSpan.FromMilliseconds(250);
+
+    readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
     AppSettings _settings;
-    AlertLevel? _shown;
-    bool _lit;
+    (AlertLevel? Level, bool On)? _shown;
 
     public TrafficLightOverlay(AppSettings settings, TelemetryHub hub)
     {
@@ -73,19 +77,21 @@ public partial class TrafficLightOverlay : Window
         if (frame is null || !(coach ? _settings.CoachAlerts : _settings.TruckAlerts))
         {
             if (IsVisible) Hide();
-            _lit = false;
+            _shown = null;
             return;
         }
-        // Null is green: nothing to warn about.
-        var level = AlertLight.For(_hub.Alerts.Select(a => a.Level));
-        if (!_lit || level != _shown)
+        var alerts = _hub.Alerts;
+        var light = AlertLight.Show(alerts.Select(a => a.Level).ToList(), _hub.Score.Level);
+        // A flash starts lit, from the latest event, so each new one is seen at once.
+        var on = !light.Flashing ||
+                 (long)((DateTime.UtcNow - alerts.Max(a => a.Started)) / FlashHalf) % 2 == 0;
+        if (_shown != (light.Level, on))
         {
-            // Only on a change, so a steady light redraws nothing.
-            GreenLamp.Fill = level is null ? GreenOn : GreenOff;
-            YellowLamp.Fill = level == AlertLevel.Yellow ? YellowOn : YellowOff;
-            RedLamp.Fill = level == AlertLevel.Red ? RedOn : RedOff;
-            _shown = level;
-            _lit = true;
+            // Only on a change, so a steady light redraws nothing. Null is green.
+            GreenLamp.Fill = on && light.Level is null ? GreenOn : GreenOff;
+            YellowLamp.Fill = on && light.Level == AlertLevel.Yellow ? YellowOn : YellowOff;
+            RedLamp.Fill = on && light.Level == AlertLevel.Red ? RedOn : RedOff;
+            _shown = (light.Level, on);
         }
         if (!IsVisible) Show();
     }

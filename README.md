@@ -11,12 +11,12 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
 | **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
 | **Mods** · Coach passengers | How much g-force passengers take (a normal and a harsh limit for each of cornering, bumps, and accelerating and braking, and the job-failure limit, with presets); choose what lowers satisfaction; board at 100% | Generated mod `ets2u_coach_<tag>.scs` |
-| **Mods** · HUD | Route advisor map position (trucks and coaches); hide the coaches' g-force meter on the route advisor | Generated mod `ets2u_ui_<tag>.scs` ("ETS2 Utilities: HUD") |
+| **Mods** · HUD | Route advisor map position (trucks and coaches) | Generated mod `ets2u_ui_<tag>.scs` ("ETS2 Utilities: HUD") |
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
-| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left), both or neither | Telemetry plugin + on-screen overlay |
+| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the last 30 minutes' safety score), both or neither | Telemetry plugin + on-screen overlay |
 | **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event is listed with its time, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click; driving time and distance in game time (with the real ones beside them), top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
@@ -90,22 +90,32 @@ Jobs saved by 0.12.0 counted real time; the app converts them using the job's ow
 ## Traffic light
 
 The Driving alerts page can show the alerts as cards, as a traffic light, as both or as neither. The light
-is three lamps in a row, green on the left: green while the driving is smooth, yellow or red while an event
-of that level is on and for the same 4 seconds after it as a card. It's click-through, hidden while the game
-is paused and in a vehicle whose alerts are off. Pick its corner and size on the same page.
+is three lamps in a row, green on the left, and shows two things:
 
-## Hiding the game's g-force meter
+- **An event**: when harsh acceleration, braking, cornering or speeding reaches yellow or red, the light
+  switches to that lamp and flashes it (a quarter of a second on, a quarter off) while the event lasts and
+  for the same 4 seconds after it as a card. With several at once, the worst one flashes.
+- **Between events**: one lamp stays lit, steady, for how the recent driving has gone. It's the
+  [safety score](#safety-score) of the last 30 minutes of driving (15 or 60 can be picked instead), rolling
+  forward as you drive: green under 20, yellow under 40, red from 40. One harsh moment doesn't change it,
+  but a run of them keeps it yellow or red until they fall out of the window behind you.
 
-The coaches' g-force meter is part of the route advisor's centre block (`ui/adviser_center.sii`, and
-`ui/adviser_gps_oculus.sii` in VR): a dial picture and a needle drawn through the text template
-`txt.hud.bus_gmeter.pointer` (`ui/template/text.mod_bus.sii`). With **Hide the game's g-force meter** ticked
-(HUD page), the HUD mod ships those files with the dial, its VR background and the needle's picture emptied;
-nothing else in them changes, and the satisfaction icon stays. Passengers still feel the g-forces as before.
-Another mod that replaces the same files can't be used alongside it.
+The window counts real minutes spent moving, so a break at a stop doesn't wash a bad stretch away and the
+paused game doesn't age it; the score itself is per 10 game hours, as in the summaries. Until the window
+holds 2 game hours of driving (about 6 real minutes on roads), the score is taken over 2 hours anyway, so
+one event in the first minute doesn't turn it red: it takes 4 points (yellow 1, red 2) to show yellow and 8
+to show red then. Over a full 30-minute window on roads (about 9½ game hours) yellow takes about 19 points
+and red about 38. Only the events the alerts show count (speeding only with its alerts on), and only while
+the alerts are on for that vehicle. The score starts afresh each time the app starts.
 
-0.12.0 and 0.12.1 kept this switch in the Coach comfort mod. From 0.12.2 it's part of the HUD mod (called
-"Route advisor position" until then; its file name, `ets2u_ui_<tag>.scs`, stays the same, so it stays enabled
-where it was). The switch carries over; if the HUD mod isn't enabled in any profile, the app says to enable it.
+It's click-through, hidden while the game is paused and in a vehicle whose alerts are off. Pick its corner,
+size and window on the same page.
+
+## The game's g-force meter
+
+The game has its own switch to hide the coaches' g-force meter on the route advisor, in its options, so no
+mod is needed. 0.12.0 to 0.12.2 could hide it with a mod (first Coach comfort, then HUD); from 0.12.3 the HUD
+mod no longer ships those files, and the app says so once when it rebuilds the mods for someone who had it on.
 
 ## Destination display
 
@@ -227,7 +237,7 @@ When you host from inside the game, tick **Enable optional mods** on the Convoy 
 | Destination display | Only changes what you see on your own coach |
 | Livery pack | Others see your livery only if they have it too; the pack is optional for them |
 | Make optional | The copy is optional for others; what you change (an engine, tires) applies to your own vehicle |
-| HUD (map position, g-force meter) | Only changes your HUD |
+| HUD (map position) | Only changes your HUD |
 | Bigger earnings | Applies to your own jobs; not checked for jobs shared by the host |
 | Money & XP | Edits your own profile's save; other players aren't affected |
 | Speed overlay, driving alerts, traffic light, trip and job summaries, mouse driving | Run on your PC only |
