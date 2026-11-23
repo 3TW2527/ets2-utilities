@@ -724,10 +724,10 @@
                         <StackPanel Orientation="Horizontal" Margin="40,4,0,0">
                             <TextBlock Text="Between events, show how the last" VerticalAlignment="Center"/>
                             <ComboBox x:Name="TrafficLightMinutesBox" Width="60" Margin="6,0"/>
-                            <TextBlock Text="in-game minutes went" VerticalAlignment="Center"/>
+                            <TextBlock Text="in-game minutes of driving went" VerticalAlignment="Center"/>
                         </StackPanel>
                         <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). An event flashes the light yellow or red for as long as a card would show. Between events one lamp stays lit for the recent driving, counted back from now on the game's clock: red if a red event happened in those last minutes, yellow if a yellow one did, green if none. Each event drops off by itself once it has been over that long (60 game minutes are about 3 real minutes on roads), moving or standing. A paused game doesn't count, and the light is hidden then."/>
+                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). An event flashes the light yellow or red for as long as a card would show. Between events one lamp stays lit for the recent driving, scored like the trip summary (yellow events + 2 x red, per 10 hours) over only those last minutes of driving and the events in them: green under 20, yellow under 40, red from 40. With 60 minutes one red scores 20 (yellow), two reds 40 (red); with 120 one red stays green. Events drop out as you drive on (60 game minutes are about 3 real minutes on roads); standing still or a paused game doesn't age them, and the light is hidden while paused."/>
                         <CheckBox x:Name="GMeterBox" Margin="0,10,0,0" Click="GMeter_Click" FontWeight="SemiBold"
                                   Content="Show the live g-force meter (now and peak in each direction, coloured by these thresholds)"/>
                         <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"

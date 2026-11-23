@@ -52,7 +52,7 @@ public sealed class AppSettings
     public OverlayCorner TrafficLightCorner { get; set; } = OverlayCorner.TopCenter;
     public double TrafficLightScale { get; set; } = 1;
     /// <summary>
-    /// How many minutes of the game's clock the light's steady colour looks back over (30, 60 or 120). A new
+    /// How many game minutes of driving the light's steady score covers (30, 60 or 120). A new
     /// name: the old TrafficLightMinutes counted real minutes of driving, and is left behind.
     /// </summary>
     public int TrafficLightGameMinutes { get; set; } = 60;

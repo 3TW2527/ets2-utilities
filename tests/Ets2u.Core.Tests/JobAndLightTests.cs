@@ -342,109 +342,101 @@ public class DriveStatusTests
         Assert.Equal(new LightState(AlertLevel.Red, false), AlertLight.Show([], AlertLevel.Red));
     }
 
-    /// <summary>The game's clock: Wednesday 14:00.</summary>
-    const uint Wed1400 = 2 * 1440 + 14 * 60;
-
-    static DrivingEvent Event(AlertLevel level, uint gameMinute, bool ended = true)
+    /// <summary>Drives in 100 ms frames at the given time scale (x20: 3 real seconds a game minute).</summary>
+    static void Drive(DriveStatus status, ref DateTime now, TimeSpan gameTime, double scale = 20, float speedMs = 20)
     {
-        var e = new DrivingEvent { Kind = DrivingEventKind.Braking, Started = T0, GameStarted = gameMinute };
+        var real = gameTime / scale;
+        for (var t = TimeSpan.Zero; t < real; t += TimeSpan.FromMilliseconds(100))
+        {
+            now += TimeSpan.FromMilliseconds(100);
+            status.Step(now, speedMs, scale, []);
+        }
+    }
+
+    static DrivingEvent Event(DriveStatus status, DateTime now, AlertLevel level, bool ended = true)
+    {
+        var e = new DrivingEvent { Kind = DrivingEventKind.Braking, Started = now };
         typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Level))!.SetValue(e, level);
-        if (ended) typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Ended))!.SetValue(e, T0);
+        status.Step(now, 20, 20, [e]);
+        if (ended) typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Ended))!.SetValue(e, now);
         return e;
     }
 
-    /// <summary>Runs the game's clock on, a minute a step, with no new events.</summary>
-    static void Run(DriveStatus status, ref uint clock, int minutes)
-    {
-        for (var i = 0; i < minutes; i++) status.Step(++clock, []);
-    }
-
-    [Fact]
-    public void TheLightRollsBackToGreenAsTheGameClockRunsOnWithoutNewEvents()
-    {
-        var status = new DriveStatus { WindowMinutes = 60 };
-        var clock = Wed1400;
-        status.Step(clock, []);
-        Assert.Null(status.Level);
-
-        status.Step(clock, [Event(AlertLevel.Yellow, clock)]);
-        Assert.Equal(AlertLevel.Yellow, status.Level);
-        Run(status, ref clock, 20);
-        status.Step(clock, [Event(AlertLevel.Red, clock)]);
-        Assert.Equal(AlertLevel.Red, status.Level);
-
-        // 40 minutes on the yellow is 60 minutes old and drops off; the red, 40 minutes old, still shows.
-        Run(status, ref clock, 40);
-        Assert.Equal(AlertLevel.Red, status.Level);
-        // 20 more and the red is 60 minutes old: back to green, with no event to set it off.
-        Run(status, ref clock, 19);
-        Assert.Equal(AlertLevel.Red, status.Level);
-        Run(status, ref clock, 1);
-        Assert.Null(status.Level);
-    }
-
     [Theory]
-    [InlineData(30)]
-    [InlineData(60)]
-    [InlineData(120)]
-    public void TheWindowIsInGameMinutes(int window)
+    [InlineData(30, AlertLevel.Yellow, AlertLevel.Red)]   // 1 yellow scores 20, 1 red 40
+    [InlineData(60, null, AlertLevel.Yellow)]               // 10 and 20
+    [InlineData(120, null, null)]                           // 5 and 10
+    public void OneEventWeighsWhatItWouldInATripAsLongAsTheWindow(int window, AlertLevel? oneYellow, AlertLevel? oneRed)
     {
         var status = new DriveStatus { WindowMinutes = window };
-        var clock = Wed1400;
-        status.Step(clock, [Event(AlertLevel.Yellow, clock)]);
-        Run(status, ref clock, window - 1);
-        Assert.Equal(AlertLevel.Yellow, status.Level);
-        Run(status, ref clock, 1);
-        Assert.Null(status.Level);
+        var now = T0;
+        Event(status, now, AlertLevel.Yellow);
+        Assert.Equal(oneYellow, status.Level);
+        Assert.Equal(10.0 * 60 / window, status.Score, 3);
+
+        var red = new DriveStatus { WindowMinutes = window };
+        Event(red, now, AlertLevel.Red);
+        Assert.Equal(oneRed, red.Level);
     }
 
     [Fact]
-    public void AnEventStillGoingOnCountsFromWhenItEnds()
+    public void ARunOfEventsTurnsItRedAndItEasesBackAsTheyAreDrivenPast()
     {
-        var status = new DriveStatus { WindowMinutes = 30 };
-        var clock = Wed1400;
-        var speeding = Event(AlertLevel.Red, clock, ended: false);
-        status.Step(clock, [speeding]);
-        Run(status, ref clock, 45); // 45 game minutes over the limit
-        typeof(DrivingEvent).GetProperty(nameof(DrivingEvent.Ended))!.SetValue(speeding, T0);
-        Run(status, ref clock, 29);
-        Assert.Equal(AlertLevel.Red, status.Level);
-        Run(status, ref clock, 1);
+        var status = new DriveStatus { WindowMinutes = 60 };
+        var now = T0;
+        Drive(status, ref now, TimeSpan.FromMinutes(10));
+        Event(status, now, AlertLevel.Red);
+        Assert.Equal(AlertLevel.Yellow, status.Level); // 2 points: 20
+        Drive(status, ref now, TimeSpan.FromMinutes(20));
+        Event(status, now, AlertLevel.Red);
+        Assert.Equal(AlertLevel.Red, status.Level); // 4 points: 40
+
+        // 40 game minutes on, the first red (at 10) is 60 minutes back: dropped, yellow again.
+        Drive(status, ref now, TimeSpan.FromMinutes(42));
+        Assert.Equal(2, status.Points);
+        Assert.Equal(AlertLevel.Yellow, status.Level);
+        Assert.InRange(status.Driven.TotalMinutes, 59, 61);
+        // And then the second: green.
+        Drive(status, ref now, TimeSpan.FromMinutes(20));
+        Assert.Equal(0, status.Points);
         Assert.Null(status.Level);
     }
 
     [Fact]
-    public void AYellowThatTurnsRedShowsRed()
+    public void AYellowThatTurnsRedCountsTwoInAll()
     {
         var detector = new DrivingEventDetector { Speeding = false };
-        var status = new DriveStatus();
+        var status = new DriveStatus { WindowMinutes = 60 };
         var now = T0;
         // Coach defaults: yellow from 0.35 g, red from 0.7 g.
         foreach (var g in new[] { 0f, 0.4f, 0.5f, 0.8f, 0.8f, 0f })
         {
             now += TimeSpan.FromMilliseconds(100);
-            status.Step(Wed1400, detector.Update(now, -g, 0, 20, 0, Wed1400, 19));
+            status.Step(now, 20, 20, detector.Update(now, -g, 0, 20, 0));
         }
-        Assert.Equal(AlertLevel.Red, status.Level);
+        Assert.Equal(2, status.Points);
+        Assert.Equal(20, status.Score, 3);
     }
 
     [Fact]
-    public void APausedGameDoesntAgeItButSleepingDoesAndAnEarlierClockStartsAfresh()
+    public void StandingStillOrPausedDoesntAgeTheWindow()
     {
-        var status = new DriveStatus { WindowMinutes = 60 };
-        var clock = Wed1400;
-        status.Step(clock, [Event(AlertLevel.Red, clock)]);
-        for (var i = 0; i < 100; i++) status.Step(null, []); // paused or closed: no clock
-        status.Step(clock, []); // the clock stands still while paused
+        var status = new DriveStatus { WindowMinutes = 30 };
+        var now = T0;
+        Drive(status, ref now, TimeSpan.FromMinutes(5));
+        Event(status, now, AlertLevel.Red);
+        Drive(status, ref now, TimeSpan.FromMinutes(60), speedMs: 0); // a break at a stop
+        for (var i = 0; i < 100; i++)
+        {
+            now += TimeSpan.FromSeconds(1);
+            status.Step(now, null, 20, []); // paused
+        }
+        Assert.Equal(2, status.Points);
         Assert.Equal(AlertLevel.Red, status.Level);
-
-        status.Step(clock + 9 * 60, []); // slept 9 hours
-        Assert.Null(status.Level);
-
-        status.Step(clock + 9 * 60, [Event(AlertLevel.Yellow, clock + 9 * 60)]);
-        status.Step(clock - 3000, []); // another profile, its clock earlier
-        Assert.Null(status.Level);
     }
+
+    /// <summary>The game's clock: Wednesday 14:00.</summary>
+    const uint Wed1400 = 2 * 1440 + 14 * 60;
 
     [Fact]
     public void EventsAreDatedByTheGameClockAndShownWithBothTimes()

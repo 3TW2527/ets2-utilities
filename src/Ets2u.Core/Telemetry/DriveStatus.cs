@@ -1,56 +1,107 @@
 namespace Ets2u.Core.Telemetry;
 
 /// <summary>
-/// The traffic light's steady colour: how the driving has gone over the last <see cref="WindowMinutes"/>
-/// of the game's clock, counted back from now. Red while a red event happened in that time, yellow while
-/// a yellow one did, green otherwise. It rolls on with the clock, not with events: an event lights its
-/// colour from the moment it happens until it has been over for the whole window, then drops off on its
-/// own, so the light eases back to green as the clock runs on, moving or standing.
+/// The traffic light's steady colour: the trip summary's safety score (yellow events + 2 x red, per 10
+/// hours of driving, see <see cref="TripSummary.Score"/>) taken over only the last
+/// <see cref="WindowMinutes"/> of driving, in game time, and the events in that stretch. It rolls on as
+/// you drive: each event drops out once the window has been driven past it, so the light eases back to
+/// green, and one event alone weighs as much as it would in a trip of that length (one red in 60 minutes
+/// scores 20, yellow; in 120 minutes, 10, green).
 ///
-/// The clock is the game's (the plugin's game.time, in minutes), so the window is in game time: 60 game
-/// minutes are about 3 real minutes on roads. A paused or closed game doesn't age it; sleeping does, and a
-/// clock that goes back (another profile or save loaded) starts the window afresh.
+/// The driving time is the trip's: game time spent moving (real time x the game's time scale), so standing
+/// still or a paused game doesn't age the window. The hours are always the window's full length, also
+/// before that much has been driven, so one event in the first minutes isn't blown up to a red.
 /// Fed by the telemetry reader thread only.
 /// </summary>
 public sealed class DriveStatus
 {
-    /// <summary>Events in the window, and the game minute each was last seen going on.</summary>
-    readonly List<(DrivingEvent Event, uint Last)> _events = new();
-    uint? _clock;
+    const double MovingKmh = 1;
+    static readonly TimeSpan MaxStep = TimeSpan.FromSeconds(1);
+    /// <summary>Driving is kept in slices this long (game time), dropped whole as they leave the window.</summary>
+    static readonly TimeSpan Slice = TimeSpan.FromMinutes(1);
 
-    /// <summary>The window, in game minutes (30, 60 or 120 in the app).</summary>
+    sealed class Bucket
+    {
+        public TimeSpan Game;
+        public int Points;
+    }
+
+    readonly LinkedList<Bucket> _buckets = new();
+    /// <summary>Events still going on, and the points they have earned so far (1 yellow, 2 once red).</summary>
+    readonly List<(DrivingEvent Event, int Points)> _open = new();
+    DateTime? _lastFrame;
+    TimeSpan _driven;
+    int _points;
+
+    /// <summary>The window, in game minutes of driving (30, 60 or 120 in the app).</summary>
     public int WindowMinutes { get; set; } = 60;
 
-    /// <summary>The game minute of the latest step, or null before the game has sent one.</summary>
-    public uint? Clock => _clock;
+    /// <summary>Points (yellow 1, red 2) of the events in the window.</summary>
+    public int Points => _points;
 
-    /// <summary>The steady colour: the worst event within the window; null is green.</summary>
-    public AlertLevel? Level => AlertLight.For(_events.Select(x => x.Event.Level));
+    /// <summary>Game driving time the window holds so far (up to its length).</summary>
+    public TimeSpan Driven => _driven;
 
-    /// <summary>One reader step: the game's clock (null while it isn't known) and the events that started or turned red.</summary>
-    public void Step(uint? gameMinute, IEnumerable<DrivingEvent> news)
+    /// <summary>Events per 10 hours over the window, the window's full length counting as the hours.</summary>
+    public double Score => _points / (WindowMinutes / 60.0) * 10;
+
+    /// <summary>The steady colour, by the trip summary's bands; null is green.</summary>
+    public AlertLevel? Level => TripSummary.Band(Score);
+
+    /// <summary>One reader step: the speed (null while paused, closed or the alerts are off), the game's time scale and the events that started or turned red.</summary>
+    public void Step(DateTime now, float? speedMs, double scale, IEnumerable<DrivingEvent> news)
     {
-        if (gameMinute is { } now)
-        {
-            if (_clock is { } before && now < before) _events.Clear();
-            _clock = now;
-        }
+        if (_buckets.Last is null) _buckets.AddLast(new Bucket());
+        var bucket = _buckets.Last!.Value;
         foreach (var e in news)
-            if (!_events.Exists(x => ReferenceEquals(x.Event, e)) && (_clock ?? e.GameStarted) is { } at)
-                _events.Add((e, at));
-        if (_clock is not { } clock) return;
-        for (var i = _events.Count - 1; i >= 0; i--)
         {
-            var (e, last) = _events[i];
-            // Still going on: it counts from now.
-            if (e.Ended is null) _events[i] = (e, last = clock);
-            if (clock - last >= WindowMinutes) _events.RemoveAt(i);
+            var points = e.Level == AlertLevel.Red ? 2 : 1;
+            var i = _open.FindIndex(x => ReferenceEquals(x.Event, e));
+            var earned = i < 0 ? 0 : _open[i].Points;
+            if (points > earned)
+            {
+                bucket.Points += points - earned;
+                _points += points - earned;
+            }
+            if (i < 0) _open.Add((e, points)); else _open[i] = (e, Math.Max(points, earned));
+        }
+        _open.RemoveAll(x => x.Event.Ended is not null);
+
+        if (speedMs is not { } ms)
+        {
+            _lastFrame = null;
+            return;
+        }
+        var kmh = Math.Abs(ms) * 3.6;
+        if (_lastFrame is { } last && now - last is var dt && dt > TimeSpan.Zero && dt <= MaxStep && kmh >= MovingKmh)
+        {
+            var game = dt * scale;
+            bucket.Game += game;
+            _driven += game;
+            if (bucket.Game >= Slice) _buckets.AddLast(new Bucket());
+            Trim();
+        }
+        _lastFrame = now;
+    }
+
+    /// <summary>Drops the oldest slices once the rest still fill the window.</summary>
+    void Trim()
+    {
+        var window = TimeSpan.FromMinutes(WindowMinutes);
+        while (_buckets.First is { } first && first != _buckets.Last && _driven - first.Value.Game >= window)
+        {
+            _driven -= first.Value.Game;
+            _points -= first.Value.Points;
+            _buckets.RemoveFirst();
         }
     }
 
     public void Clear()
     {
-        _events.Clear();
-        _clock = null;
+        _buckets.Clear();
+        _open.Clear();
+        _lastFrame = null;
+        _driven = TimeSpan.Zero;
+        _points = 0;
     }
 }
