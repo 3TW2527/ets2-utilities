@@ -46,7 +46,7 @@ public sealed class TelemetryHub : IDisposable
     bool _coach;
     GPeaks _peaks;
     IReadOnlyList<AlertCard> _alerts = [];
-    DriveScore _score;
+    AlertLevel? _recent;
     int _savedRevision;
     DateTime _savedAt;
 
@@ -87,10 +87,10 @@ public sealed class TelemetryHub : IDisposable
         get { lock (_lock) return _alerts; }
     }
 
-    /// <summary>The recent driving's safety score, for the traffic light's steady colour.</summary>
-    public DriveScore Score
+    /// <summary>The worst event in the last few game minutes (null is green), for the traffic light's steady colour.</summary>
+    public AlertLevel? Recent
     {
-        get { lock (_lock) return _score; }
+        get { lock (_lock) return _recent; }
     }
 
     public DrivingThresholds ThresholdsFor(bool coach) =>
@@ -131,7 +131,7 @@ public sealed class TelemetryHub : IDisposable
             // Speeding is left out everywhere (alerts, light, trips, jobs) while its switch is off.
             _detector.Speeding = _settings.SpeedingAlerts;
             _detector.Thresholds = ThresholdsFor(coach);
-            news = _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs);
+            news = _detector.Update(now, f.AccelForwardG, f.AccelRightG, f.SpeedMs, f.SpeedLimitMs, f.GameMinute, f.Scale);
             if (alerts)
                 foreach (var e in news)
                     if (e.Kind != DrivingEventKind.Speeding || _settings.SpeedingAlerts)
@@ -145,9 +145,9 @@ public sealed class TelemetryHub : IDisposable
             _detector.Reset(now);
         }
         var scale = (frame ?? raw)?.Scale ?? 1;
-        // The light's score counts what the alerts show, and only while they're on for this vehicle.
-        _status.Window = TimeSpan.FromMinutes(Math.Clamp(_settings.TrafficLightMinutes, 5, 120));
-        _status.Step(now, alerts ? frame?.SpeedMs : null, scale, shown);
+        // The light's steady colour counts what the alerts show, over the last few minutes of the game's clock.
+        _status.WindowMinutes = Math.Clamp(_settings.TrafficLightGameMinutes, 5, 240);
+        _status.Step((frame ?? raw)?.GameMinute, shown);
         Trip.Step(now, frame?.SpeedMs, coach, news, scale);
         if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished)
         {
@@ -165,7 +165,7 @@ public sealed class TelemetryHub : IDisposable
             _frame = frame;
             _coach = coach;
             _alerts = cards;
-            _score = _status.Current;
+            _recent = _status.Level;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));

@@ -51,8 +51,11 @@ public sealed class AppSettings
     public bool TrafficLight { get; set; }
     public OverlayCorner TrafficLightCorner { get; set; } = OverlayCorner.TopCenter;
     public double TrafficLightScale { get; set; } = 1;
-    /// <summary>How many minutes of recent driving the light's steady colour covers (15, 30 or 60).</summary>
-    public int TrafficLightMinutes { get; set; } = 30;
+    /// <summary>
+    /// How many minutes of the game's clock the light's steady colour looks back over (30, 60 or 120). A new
+    /// name: the old TrafficLightMinutes counted real minutes of driving, and is left behind.
+    /// </summary>
+    public int TrafficLightGameMinutes { get; set; } = 60;
 
     /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
     public bool RecordCoachJobs { get; set; } = true;

@@ -137,6 +137,10 @@ public sealed class DrivingEvent
     public required DateTime Started { get; init; }
     /// <summary>Null while it lasts.</summary>
     public DateTime? Ended { get; internal set; }
+    /// <summary>The game's clock when it started (minutes, see <see cref="GameClock"/>); null when the game didn't send it.</summary>
+    public uint? GameStarted { get; init; }
+    /// <summary>The game's time scale when it started (game seconds per real second), for how long it lasted in game time.</summary>
+    public double Scale { get; init; } = 1;
     /// <summary>Speed in km/h when it started, and the latest while it lasts (the last one once it's over).</summary>
     public double StartKmh { get; internal set; }
     public double EndKmh { get; internal set; }
@@ -193,6 +197,8 @@ public sealed class DrivingEventDetector
     const double MinKmh = 5;
 
     readonly Dictionary<DrivingEventKind, DrivingEvent> _active = new();
+    uint? _gameMinute;
+    double _scale = 1;
 
     public DrivingThresholds Thresholds { get; set; } = new();
     public bool Speeding { get; set; } = true;
@@ -202,9 +208,15 @@ public sealed class DrivingEventDetector
     /// <summary>Speeding starts at this speed, in km/h; null without a limit.</summary>
     public static double? SpeedingThreshold(double limitKmh) => limitKmh < 1 ? null : limitKmh * 1.1 + 2;
 
-    /// <summary>Takes one frame; returns the events that started or turned red in it.</summary>
-    public IReadOnlyList<DrivingEvent> Update(DateTime now, float forwardG, float rightG, float speedMs, float limitMs)
+    /// <summary>
+    /// Takes one frame; returns the events that started or turned red in it. <paramref name="gameMinute"/> and
+    /// <paramref name="scale"/> (the game's clock and time scale) date the new events in game time too.
+    /// </summary>
+    public IReadOnlyList<DrivingEvent> Update(DateTime now, float forwardG, float rightG, float speedMs, float limitMs,
+                                              uint? gameMinute = null, double scale = 1)
     {
+        _gameMinute = gameMinute;
+        _scale = scale;
         var news = new List<DrivingEvent>();
         var kmh = Math.Abs(speedMs) * 3.6;
         // Going backwards, "forward" acceleration is braking.
@@ -226,7 +238,7 @@ public sealed class DrivingEventDetector
                 speeding = new DrivingEvent
                 {
                     Kind = DrivingEventKind.Speeding, Started = now, Level = AlertLevel.Red, Peak = kmh, LimitKmh = limitKmh,
-                    StartKmh = kmh, EndKmh = kmh,
+                    StartKmh = kmh, EndKmh = kmh, GameStarted = _gameMinute, Scale = _scale,
                 };
                 _active[DrivingEventKind.Speeding] = speeding;
                 news.Add(speeding);
@@ -255,6 +267,7 @@ public sealed class DrivingEventDetector
             {
                 Kind = kind, Started = now, Peak = g, Level = g >= red ? AlertLevel.Red : AlertLevel.Yellow,
                 StartKmh = kmh, EndKmh = kmh, MaxForwardG = Math.Max(along, 0), MaxBackwardG = Math.Max(-along, 0),
+                GameStarted = _gameMinute, Scale = _scale,
             };
             _active[kind] = e;
             news.Add(e);
@@ -313,4 +326,14 @@ public static class AlertLight
         }
         return light;
     }
+}
+
+/// <summary>The game's clock as the plugin sends it: minutes since 00:00 of the first day, a Monday.</summary>
+public static class GameClock
+{
+    static readonly string[] Days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    /// <summary>"Wed 14:32".</summary>
+    public static string Format(uint minutes) =>
+        string.Create(CultureInfo.InvariantCulture, $"{Days[minutes / 1440 % 7]} {minutes % 1440 / 60:00}:{minutes % 60:00}");
 }

@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 5;
+    public const uint ExpectedVersion = 6;
 
     public uint Magic;
     public uint Version;
@@ -42,9 +42,14 @@ public struct TelemetryFrame
     /// faster); 0 when the game doesn't send it. See <see cref="Scale"/>.
     /// </summary>
     public float LocalScale;
+    /// <summary>The game's clock (game.time): minutes since 00:00 of its first day, a Monday; 0 when not sent.</summary>
+    public uint GameTime;
 
     /// <summary>The time scale to use: 1 when the game didn't send one.</summary>
     public readonly double Scale => LocalScale > 0 && float.IsFinite(LocalScale) ? LocalScale : 1;
+
+    /// <summary>The game's clock in minutes, or null when the game didn't send it.</summary>
+    public readonly uint? GameMinute => GameTime > 0 ? GameTime : null;
 
     public readonly string TruckId
     {

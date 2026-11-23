@@ -3,12 +3,33 @@ using System.Globalization;
 namespace Ets2u.Core.Telemetry;
 
 /// <summary>One safety event of a trip, copied so the UI never reads what the reader thread is changing.</summary>
+/// <param name="GameStarted">The game's clock when it started (see <see cref="GameClock"/>); null when not known (saved before 0.12.5).</param>
+/// <param name="Scale">The game's time scale when it started; null when not known.</param>
 public sealed record TripEvent(
     DrivingEventKind Kind, AlertLevel Level, DateTime Started, DateTime? Ended,
-    string Category, string Variant, string Detail, double Peak, double StartKmh, double EndKmh, bool Coach)
+    string Category, string Variant, string Detail, double Peak, double StartKmh, double EndKmh, bool Coach,
+    uint? GameStarted = null, double? Scale = null)
 {
-    /// <summary>How long it lasted, or so far.</summary>
+    /// <summary>How long it lasted, or so far (real time).</summary>
     public TimeSpan Duration(DateTime now) => (Ended ?? now) - Started;
+
+    /// <summary>"Wed 14:32 in game · 20:15:07 real", or just the real time when the game's clock isn't known.</summary>
+    public string TimeText(string realFormat = "HH:mm:ss")
+    {
+        var real = Started.ToLocalTime().ToString(realFormat, CultureInfo.InvariantCulture);
+        return GameStarted is { } game ? $"{GameClock.Format(game)} in game · {real} real" : real;
+    }
+
+    /// <summary>"1 min 16 s in game · 4.0 s real" (or "... so far" while it lasts); just the real one without a scale.</summary>
+    public string DurationText(DateTime now)
+    {
+        var lasted = Duration(now);
+        var real = string.Create(CultureInfo.InvariantCulture, $"{lasted.TotalSeconds:0.0} s");
+        var text = Scale is { } scale && Math.Abs(scale - 1) > 0.01
+            ? $"{TripSummary.FormatDuration(lasted * scale)} in game · {real} real"
+            : real;
+        return Ended is null ? text + " so far" : text;
+    }
 }
 
 /// <summary>
@@ -45,10 +66,8 @@ public sealed record TripSummary(
     public string DrivingText => $"{FormatDuration(DrivingTime)} driving" +
                                  (RealDrivingTime is { } real && real != DrivingTime ? $" ({FormatDuration(real)} real)" : "");
 
-    /// <summary>"97.0 km (6.0 km driven)".</summary>
-    public string DistanceText => string.Create(CultureInfo.InvariantCulture, $"{DistanceKm:0.0} km") +
-                                  (RealDistanceKm is { } real && Math.Abs(real - DistanceKm) > 0.05
-                                      ? string.Create(CultureInfo.InvariantCulture, $" ({real:0.0} km driven)") : "");
+    /// <summary>"97.0 km", in the game's terms (the real distance is kept, not shown).</summary>
+    public string DistanceText => string.Create(CultureInfo.InvariantCulture, $"{DistanceKm:0.0} km");
 
     /// <summary>Green under 20, yellow under 40, red from 40 (GreenRoad's bands).</summary>
     public static AlertLevel? Band(double score) => score < 20 ? null : score < 40 ? AlertLevel.Yellow : AlertLevel.Red;
@@ -66,7 +85,7 @@ public sealed record TripSummary(
             "Safety events",
         };
         lines.AddRange(Events.Count == 0 ? ["None"] : Events.Select(e =>
-            string.Create(c, $"{e.Started.ToLocalTime():HH:mm:ss}  {e.Level,-6}  {e.Category} - {e.Variant} ({e.Detail})")));
+            string.Create(c, $"{e.TimeText()}  {e.Level,-6}  {e.Category} - {e.Variant} ({e.Detail})")));
         return string.Join(Environment.NewLine, lines);
     }
 
@@ -235,7 +254,8 @@ public sealed class TripRecorder
             if (!_any) return null;
             var events = _events
                 .Select(x => new TripEvent(x.Event.Kind, x.Event.Level, x.Event.Started, x.Event.Ended, x.Event.Category,
-                    x.Event.Variant, x.Event.Detail, x.Event.Peak, x.Event.StartKmh, x.Event.EndKmh, x.Coach))
+                    x.Event.Variant, x.Event.Detail, x.Event.Peak, x.Event.StartKmh, x.Event.EndKmh, x.Coach,
+                    x.Event.GameStarted, x.Event.Scale))
                 .Concat(_restored)
                 .OrderBy(e => e.Started)
                 .ToList();

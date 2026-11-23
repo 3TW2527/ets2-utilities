@@ -346,7 +346,7 @@ public class TripTests
         Assert.Equal(120, s.RealDrivingTime!.Value.TotalSeconds, 0);
         Assert.Equal(2.4, s.RealDistanceKm!.Value, 2);
         Assert.Equal("38 min 00 s driving (2 min 00 s real)", s.DrivingText);
-        Assert.Equal("45.6 km (2.4 km driven)", s.DistanceText);
+        Assert.Equal("45.6 km", s.DistanceText);
         Assert.Equal(72, s.TopKmh, 1);
         Assert.True(s.InCoach);
         Assert.False(s.InTruck);

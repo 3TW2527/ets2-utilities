@@ -441,7 +441,7 @@ public partial class MainWindow : Window
 
     SpeedOverlay? _overlay;
 
-    static readonly int[] LightMinutes = [15, 30, 60];
+    static readonly int[] LightMinutes = [30, 60, 120];
 
     static readonly Dictionary<OverlayCorner, string> CornerNames = new()
     {
@@ -601,7 +601,7 @@ public partial class MainWindow : Window
         TrafficLightCornerBox.SelectedValue = s.TrafficLightCorner;
         TrafficLightScaleSlider.Value = s.TrafficLightScale;
         TrafficLightMinutesBox.ItemsSource = LightMinutes;
-        TrafficLightMinutesBox.SelectedItem = LightMinutes.Contains(s.TrafficLightMinutes) ? s.TrafficLightMinutes : 30;
+        TrafficLightMinutesBox.SelectedItem = LightMinutes.Contains(s.TrafficLightGameMinutes) ? s.TrafficLightGameMinutes : 60;
         AlertsStatus.Text = DescribeAlerts(s);
     }
 
@@ -682,7 +682,7 @@ public partial class MainWindow : Window
         s.TrafficLight = TrafficLightBox.IsChecked == true;
         s.TrafficLightCorner = TrafficLightCornerBox.SelectedValue is OverlayCorner corner ? corner : OverlayCorner.TopCenter;
         s.TrafficLightScale = Math.Round(TrafficLightScaleSlider.Value, 1);
-        s.TrafficLightMinutes = TrafficLightMinutesBox.SelectedItem is int minutes ? minutes : 30;
+        s.TrafficLightGameMinutes = TrafficLightMinutesBox.SelectedItem is int minutes ? minutes : 60;
         s.Save();
         UpdateOverlay();
         return DescribeAlerts(s);

@@ -10,9 +10,9 @@ namespace Ets2u.App;
 /// The alerts as a GreenRoad-style light bar: green, yellow and red lamps in a row, green on the left.
 /// It shows two things. An event flashes its lamp (yellow or red) while it's on and for the same few
 /// seconds after it as a card. Between events one lamp stays lit, steady, for how the recent driving has
-/// gone: the safety score of the last 15, 30 or 60 minutes of driving (<see cref="DriveStatus"/>), so too
-/// many events keep it yellow or red until they roll out of that window. Click-through; hidden while the
-/// game is paused or closed, and in a vehicle whose alerts are off.
+/// gone: the worst event of the last 30, 60 or 120 minutes of the game's clock (<see cref="DriveStatus"/>),
+/// rolling on with the clock so it eases back to green by itself. Click-through; hidden while the game is
+/// paused or closed, and in a vehicle whose alerts are off.
 /// </summary>
 public partial class TrafficLightOverlay : Window
 {
@@ -81,7 +81,7 @@ public partial class TrafficLightOverlay : Window
             return;
         }
         var alerts = _hub.Alerts;
-        var light = AlertLight.Show(alerts.Select(a => a.Level).ToList(), _hub.Score.Level);
+        var light = AlertLight.Show(alerts.Select(a => a.Level).ToList(), _hub.Recent);
         // A flash starts lit, from the latest event, so each new one is seen at once.
         var on = !light.Flashing ||
                  (long)((DateTime.UtcNow - alerts.Max(a => a.Started)) / FlashHalf) % 2 == 0;

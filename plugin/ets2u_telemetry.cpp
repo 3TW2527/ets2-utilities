@@ -48,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 5
+    uint32_t version;         // layout version, 6
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -66,12 +66,13 @@ struct Ets2uTelemetry
     uint32_t gameplay_count;  // gameplay events so far; the latest is in gameplay[(count - 1) % 4]
     char gameplay[4][512];    // "id" on the first line, then the event's attributes as in job_info
     float local_scale;        // local.scale: game seconds per real second (ETS2 ~19 on roads, less in towns); 0 = not sent
+    uint32_t game_time;       // game.time: the game's clock, in minutes since 00:00 of its first day (a Monday); 0 = not sent
 };
 #pragma pack(pop)
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 5;
+static const uint32_t kVersion = 6;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -140,6 +141,11 @@ static SCSAPI_VOID store_float(const scs_string_t, const scs_u32_t, const scs_va
 {
     // With SCS_TELEMETRY_CHANNEL_FLAG_no_value a missing value arrives as nullptr.
     *static_cast<float *>(context) = value ? value->value_float.value : 0.0f;
+}
+
+static SCSAPI_VOID store_u32(const scs_string_t, const scs_u32_t, const scs_value_t *const value, const scs_context_t context)
+{
+    *static_cast<uint32_t *>(context) = value ? value->value_u32.value : 0u;
 }
 
 static SCSAPI_VOID store_fvector(const scs_string_t, const scs_u32_t, const scs_value_t *const value, const scs_context_t context)
@@ -322,6 +328,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     // time and distance in the game's terms with this, as the game's own job figures are.
     p->register_for_channel(SCS_TELEMETRY_CHANNEL_local_scale, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->local_scale);
+    // The game's clock: the app dates events by it and rolls the traffic light's window along it.
+    p->register_for_channel(SCS_TELEMETRY_CHANNEL_game_time, SCS_U32_NIL, SCS_VALUE_TYPE_u32,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_u32, &g_shared->game_time);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_ms);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, SCS_U32_NIL, SCS_VALUE_TYPE_float,
