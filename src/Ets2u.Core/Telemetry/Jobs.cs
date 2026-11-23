@@ -76,7 +76,17 @@ public static class JobText
     {
         var from = Stop(job, "source_stop.name", first: true);
         var to = Stop(job, "destination_stop.name", first: false);
-        if (from is not null || to is not null) return from is null ? to! : to is null ? from : $"{from} → {to}";
+        if (from is not null || to is not null)
+        {
+            var route = from is null ? to! : to is null ? from : $"{from} → {to}";
+            var missing = MissingStages(job);
+            return missing switch
+            {
+                0 => route,
+                1 => route + " (+1 stop not recorded)",
+                _ => string.Create(CultureInfo.InvariantCulture, $"{route} (+{missing} stops not recorded)"),
+            };
+        }
         foreach (var pair in Ends)
             if (job.GetValueOrDefault(pair[0]) is { Length: > 0 } start)
                 return job.GetValueOrDefault(pair[1]) is { Length: > 0 } end ? $"{start} → {end}" : start;
@@ -87,6 +97,20 @@ public static class JobText
         var source = Named(k => k.Contains("source", StringComparison.Ordinal));
         var target = Named(k => k.Contains("destination", StringComparison.Ordinal) || k.Contains("target", StringComparison.Ordinal));
         return source is null ? target ?? "" : target is null ? source : $"{source} → {target}";
+    }
+
+    /// <summary>
+    /// Stages the game counted (bus.stages.count) but whose stops didn't come through: before 0.13.0 the
+    /// plugin passed a job in 1 KB, so a long coach job lost its last stages.
+    /// </summary>
+    public static int MissingStages(IReadOnlyDictionary<string, string> job)
+    {
+        if (Number(job.GetValueOrDefault("bus.stages.count")) is not { } count) return 0;
+        const string key = "destination_stop.name[";
+        var recorded = job.Keys.Where(k => k.StartsWith(key, StringComparison.Ordinal))
+            .Select(k => int.TryParse(k[key.Length..].TrimEnd(']'), out var i) ? i + 1 : 0)
+            .DefaultIfEmpty(0).Max();
+        return recorded == 0 ? 0 : Math.Max(0, (int)count - recorded);
     }
 
     /// <summary>The name in key[i] with the lowest (or highest) i, or in key itself.</summary>

@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 6;
+    public const uint ExpectedVersion = 7;
 
     public uint Magic;
     public uint Version;
@@ -80,7 +80,8 @@ public struct TelemetryFrame
         return Text(all.Slice((int)(slot % GameplaySlots) * GameplaySlotSize, GameplaySlotSize));
     }
 
-    public const int GameplaySlots = 4, GameplaySlotSize = 512;
+    public const int GameplaySlots = 4, GameplaySlotSize = 2048;
+    public const int JobInfoSize = 8192;
 
     static string Text(ReadOnlySpan<byte> bytes)
     {
@@ -97,7 +98,7 @@ public struct TruckIdBytes
     byte _first;
 }
 
-[System.Runtime.CompilerServices.InlineArray(1024)]
+[System.Runtime.CompilerServices.InlineArray(TelemetryFrame.JobInfoSize)]
 public struct JobInfoBytes
 {
     byte _first;

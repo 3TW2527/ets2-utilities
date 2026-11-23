@@ -278,8 +278,8 @@ public class JobTrackerTests
 
     [Fact]
     public void TheFrameMatchesThePluginsLayout() =>
-        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[1024], gameplay_count, gameplay[4][512], local_scale, game_time
-        Assert.Equal(48 + 64 + 8 + 1024 + 4 + 2048 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
+        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[8192], gameplay_count, gameplay[4][2048], local_scale, game_time
+        Assert.Equal(48 + 64 + 8 + 8192 + 4 + 8192 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
 }
 
 public class GMeterTests
@@ -492,5 +492,31 @@ public class DriveStatusTests
         var trip = new TripSummary(T0, T0, TimeSpan.FromHours(1), 97, 80, false, true, [], TimeSpan.FromMinutes(3), 6);
         Assert.Equal("97.0 km", trip.DistanceText);
         Assert.Equal("1 h 00 min driving (3 min 00 s real)", trip.DrivingText);
+    }
+}
+
+public class JobRouteTests
+{
+    static Dictionary<string, string> Stages(int count, params string[] stops)
+    {
+        var job = new Dictionary<string, string> { ["bus.stages.count"] = count.ToString() };
+        for (var i = 0; i + 1 < stops.Length; i++)
+        {
+            job[$"source_stop.name[{i}]"] = stops[i];
+            job[$"destination_stop.name[{i}]"] = stops[i + 1];
+        }
+        return job;
+    }
+
+    [Fact]
+    public void ACompleteCoachJobRunsFromFirstToLastStop() =>
+        Assert.Equal("Barcelona → León", JobText.Route(Stages(3, "Barcelona", "Toulouse", "Clermont", "León")));
+
+    [Fact]
+    public void AJobCutShortByTheOldPluginSaysSo()
+    {
+        // Saved by a plugin that passed jobs in 1 KB: the third stage never arrived.
+        Assert.Equal("Barcelona → Clermont (+1 stop not recorded)", JobText.Route(Stages(3, "Barcelona", "Toulouse", "Clermont")));
+        Assert.Equal("Barcelona → Toulouse (+2 stops not recorded)", JobText.Route(Stages(3, "Barcelona", "Toulouse")));
     }
 }

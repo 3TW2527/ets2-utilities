@@ -60,6 +60,9 @@ planned distance, passengers). Pick a job under **Show**; **Copy summary** and *
   (`source_stop.name[i]`, `destination_stop.name[i]`, planned and actual times, passengers), and ends with
   `bus_job.completed` (revenue, XP, `passenger.satisfaction` from 0 to 1, distance); truck jobs end with
   `job.delivered` or `job.cancelled`. The route runs from the first stage's start to the last one's end.
+  Before 0.13.0 the plugin passed a job in 1 KB, which a job of three or more stages overran, so its last
+  stages were lost and the route ended at the last one that arrived; those jobs now say so, e.g.
+  "Barcelona → Clermont (+1 stop not recorded)". The plugin now has 8 KB for it: reinstall it after updating.
 - When a coach job starts, the app says so and the Trip summary page switches to it, unless you're
   capturing a trip by hand.
 - A job starts when its configuration appears and ends when it clears (or the next job starts after a

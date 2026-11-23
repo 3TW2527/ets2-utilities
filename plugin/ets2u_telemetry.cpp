@@ -48,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 6
+    uint32_t version;         // layout version, 7
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -62,9 +62,9 @@ struct Ets2uTelemetry
     char truck_id[64];        // the truck config's id, e.g. "vehicle.man.lions_24" (a coach), "" when none
     uint32_t job_seq;         // odd while job_kind / job_info are being written, bumped by 2 per change
     uint32_t job_kind;        // 0 no job, 1 a truck job ("job" config), 2 a bus job ("bus_job" config)
-    char job_info[1024];      // the job's attributes, one "name=value" per line ("name[i]=" for arrays)
+    char job_info[8192];      // the job's attributes, one "name=value" per line ("name[i]=" for arrays)
     uint32_t gameplay_count;  // gameplay events so far; the latest is in gameplay[(count - 1) % 4]
-    char gameplay[4][512];    // "id" on the first line, then the event's attributes as in job_info
+    char gameplay[4][2048];    // "id" on the first line, then the event's attributes as in job_info
     float local_scale;        // local.scale: game seconds per real second (ETS2 ~19 on roads, less in towns); 0 = not sent
     uint32_t game_time;       // game.time: the game's clock, in minutes since 00:00 of its first day (a Monday); 0 = not sent
 };
@@ -72,7 +72,7 @@ struct Ets2uTelemetry
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 6;
+static const uint32_t kVersion = 7;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -237,8 +237,9 @@ static void put_attributes(Text &t, const scs_named_value_t *a)
 }
 
 // The last "job" and "bus_job" configurations; an empty one means there's no such job.
-static char g_job[1024] = {};
-static char g_bus_job[1024] = {};
+// 8 KB: a bus job lists every stage's stops, times and passengers, and three stages overran 1 KB.
+static char g_job[8192] = {};
+static char g_bus_job[8192] = {};
 
 static void publish_job()
 {

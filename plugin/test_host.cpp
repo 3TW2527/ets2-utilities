@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     const float *f = reinterpret_cast<const float *>(raw);
     printf("magic=%08X version=%u sequence=%u paused=%u speed=%.2f limit=%.2f fwd=%.3fg right=%.3fg mouse=%u truck=%s\n",
            raw[0], raw[1], raw[2], raw[3], f[4], f[5], f[6], f[7], raw[8], reinterpret_cast<const char *>(raw + 12));
-    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 6 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
+    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 7 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
               && f[5] > 22.2f && f[5] < 22.3f
               // smoothed towards -0.4 g forward and 0.2 g right: two frames of at most 0.2 s each count: about three quarters of the way
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0
@@ -164,8 +164,8 @@ int main(int argc, char **argv)
     // A bus job starts: its attributes come through as text, whatever they're called.
     const char *job_info = reinterpret_cast<const char *>(raw) + 120;
     const uint32_t *job_seq = raw + 28, *job_kind = raw + 29;
-    const uint32_t *gameplay_count = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 1144);
-    const char *gameplay = reinterpret_cast<const char *>(raw) + 1148;
+    const uint32_t *gameplay_count = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 8312);
+    const char *gameplay = reinterpret_cast<const char *>(raw) + 8316;
     scs_named_value_t job[3] = {};
     job[0].name = "source_city"; job[0].index = SCS_U32_NIL;
     job[0].value.type = SCS_VALUE_TYPE_string; job[0].value.value_string.value = "Praha";
@@ -179,6 +179,26 @@ int main(int argc, char **argv)
     g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &bus, nullptr);
     ok = ok && *job_seq == 2;
 
+    // A three-stage coach job lists ~14 attributes per stage: well over the old 1 KB, and all of it arrives.
+    static char names[48][64];
+    static char values[48][32];
+    scs_named_value_t big[49] = {};
+    for (int i = 0; i < 48; i++)
+    {
+        snprintf(names[i], sizeof(names[i]), "destination_stop.arrival_time.planned_%02d", i % 16);
+        snprintf(values[i], sizeof(values[i]), "Stop number %d", i);
+        big[i].name = names[i]; big[i].index = static_cast<scs_u32_t>(i / 16);
+        big[i].value.type = SCS_VALUE_TYPE_string; big[i].value.value_string.value = values[i];
+    }
+    scs_telemetry_configuration_t big_bus{SCS_TELEMETRY_CONFIG_bus_job, big};
+    g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &big_bus, nullptr);
+    const size_t big_length = strlen(job_info);
+    const bool last_stage = strstr(job_info, "planned_15[2]=Stop number 47\n") != nullptr;
+    printf("big job: %zu bytes, last stage there=%d\n", big_length, last_stage);
+    ok = ok && *job_seq == 4 && big_length > 2500 && last_stage;
+    g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &bus, nullptr);
+    ok = ok && *job_seq == 6;
+
     // Delivered: a gameplay event with its attributes.
     scs_named_value_t delivered[2] = {};
     delivered[0].name = "revenue"; delivered[0].index = SCS_U32_NIL;
@@ -189,10 +209,10 @@ int main(int argc, char **argv)
     printf("gameplay: count=%u [%s]\n", *gameplay_count, gameplay);
     ok = ok && *gameplay_count == 1 && strcmp(gameplay, "bus_job.delivered\nrevenue=1234\n") == 0;
 
-    const float *local_scale = reinterpret_cast<const float *>(reinterpret_cast<const char *>(raw) + 3196);
+    const float *local_scale = reinterpret_cast<const float *>(reinterpret_cast<const char *>(raw) + 16508);
     printf("local scale=%.1f\n", *local_scale);
     ok = ok && *local_scale == 19.0f;
-    const uint32_t *game_time = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 3200);
+    const uint32_t *game_time = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 16512);
     printf("game time=%u\n", *game_time);
     ok = ok && *game_time == 2 * 1440 + 14 * 60 + 32;
 
@@ -201,7 +221,7 @@ int main(int argc, char **argv)
     scs_telemetry_configuration_t ended{SCS_TELEMETRY_CONFIG_bus_job, none};
     g_events[SCS_TELEMETRY_EVENT_configuration](SCS_TELEMETRY_EVENT_configuration, &ended, nullptr);
     printf("job ended: seq=%u kind=%u\n", *job_seq, *job_kind);
-    ok = ok && *job_seq == 4 && *job_kind == 0 && job_info[0] == 0;
+    ok = ok && *job_seq == 8 && *job_kind == 0 && job_info[0] == 0;
 
     g_events[SCS_TELEMETRY_EVENT_paused](SCS_TELEMETRY_EVENT_paused, nullptr, nullptr);
     ok = ok && raw[3] == 1;

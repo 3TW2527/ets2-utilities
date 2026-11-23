@@ -89,9 +89,9 @@ public class SpeedTextTests
         // Where the plugin's fields start (see plugin/ets2u_telemetry.cpp and plugin/test_host.cpp).
         Assert.Equal(112, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobSeq)));
         Assert.Equal(120, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.JobInfoRaw)));
-        Assert.Equal(1144, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameplayCount)));
-        Assert.Equal(3196, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.LocalScale)));
-        Assert.Equal(3200, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameTime)));
-        Assert.Equal(3204, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+        Assert.Equal(8312, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameplayCount)));
+        Assert.Equal(16508, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.LocalScale)));
+        Assert.Equal(16512, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameTime)));
+        Assert.Equal(16516, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
     }
 }
