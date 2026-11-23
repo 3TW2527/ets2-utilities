@@ -56,6 +56,8 @@ public sealed class AppSettings
     /// name: the old TrafficLightMinutes counted real minutes of driving, and is left behind.
     /// </summary>
     public int TrafficLightGameMinutes { get; set; } = 60;
+    /// <summary>How many events the light takes to stay yellow or red, the same in every window.</summary>
+    public Telemetry.LightStrictness TrafficLightStrictness { get; set; } = Telemetry.LightStrictness.Normal;
 
     /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
     public bool RecordCoachJobs { get; set; } = true;

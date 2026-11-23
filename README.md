@@ -16,7 +16,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
-| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the safety score of the last 60 in-game minutes of driving, or 30 or 120), both or neither | Telemetry plugin + on-screen overlay |
+| **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the events of the last 60 in-game minutes of driving, or 30 or 120, at a Realistic, Normal or Relaxed strictness), both or neither | Telemetry plugin + on-screen overlay |
 | **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event (speeding only while its alerts are on) is listed with its time on the game's clock and the real one, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click, sorted by time, type, level or duration, and each can be removed; driving time in game time (with the real one beside it) and distance in game terms, top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
@@ -116,23 +116,30 @@ is three lamps in a row, green on the left, and shows two things:
 - **An event**: when harsh acceleration, braking, cornering or speeding reaches yellow or red, the light
   switches to that lamp and flashes it (a quarter of a second on, a quarter off) while the event lasts and
   for the same 4 seconds after it as a card. With several at once, the worst one flashes.
-- **Between events**: one lamp stays lit, steady, for how the recent driving has gone. It's the
-  [safety score](#safety-score) taken over only the last 60 in-game minutes of driving (30 or 120 can be
-  picked instead) and the events in them, with the trip's bands: green under 20, yellow under 40, red
-  from 40. It rolls on as you drive, so each event drops out once you've driven the window past it.
+- **Between events**: one lamp stays lit, steady, for how the recent driving has gone. It counts the
+  points of the events in the last 60 in-game minutes of driving (30 or 120 can be picked instead): a
+  yellow event is 1 point, a red one 2. It rolls on as you drive, so each event drops out once you've
+  driven the window past it.
 
-The hours are always the window's full length, so one event weighs what it would in a trip that long:
-with 60 minutes one yellow scores 10 (green), one red 20 (yellow) and two reds 40 (red); with 120 minutes
-one red scores 10 (green); with 30, one yellow already scores 20 (yellow). The driving time is the trip's,
-game time spent moving, so 60 in-game minutes are about 3 real minutes on roads, and standing still or a
-paused game doesn't age the window. Only the events the alerts show count (speeding only with its alerts
-on), and only while the alerts are on for that vehicle. It starts afresh each time the app starts.
+How many points it takes is set by the strictness, and is the same whatever the window, so one event
+weighs the same in every window; the window only sets how long an event is remembered:
+
+| Strictness | Stays yellow from | Stays red from |
+|---|---|---|
+| Realistic (GreenRoad's bands over an hour) | 2 points | 4 points |
+| Normal (default) | 4 points | 8 points |
+| Relaxed | 8 points | 16 points |
+
+The driving time is the trip's, game time spent moving, so 60 in-game minutes are about 3 real minutes on
+roads, and standing still or a paused game doesn't age the window. Only the events the alerts show count
+(speeding only with its alerts on), and only while the alerts are on for that vehicle. It starts afresh
+each time the app starts.
 
 Each event in the trip and job summaries is dated both ways, e.g. "Wed 14:32 in game · 20:15:07 real", and
 its length too ("1 min 16 s in game · 4.0 s real"). Events saved before 0.12.5 show the real time only.
 
 It's click-through, hidden while the game is paused and in a vehicle whose alerts are off. Pick its corner,
-size and window on the same page.
+size, window and strictness on the same page.
 
 ## The game's g-force meter
 

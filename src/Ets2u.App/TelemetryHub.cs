@@ -147,6 +147,7 @@ public sealed class TelemetryHub : IDisposable
         var scale = (frame ?? raw)?.Scale ?? 1;
         // The light's score counts what the alerts show, and only while they're on for this vehicle.
         _status.WindowMinutes = Math.Clamp(_settings.TrafficLightGameMinutes, 5, 240);
+        _status.Strictness = _settings.TrafficLightStrictness;
         _status.Step(now, alerts ? frame?.SpeedMs : null, scale, shown);
         Trip.Step(now, frame?.SpeedMs, coach, news, scale);
         if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished)

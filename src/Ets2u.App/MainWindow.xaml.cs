@@ -442,6 +442,12 @@ public partial class MainWindow : Window
     SpeedOverlay? _overlay;
 
     static readonly int[] LightMinutes = [30, 60, 120];
+    static readonly KeyValuePair<LightStrictness, string>[] StrictnessNames =
+    [
+        new(LightStrictness.Realistic, "Realistic: yellow from 2 points, red from 4"),
+        new(LightStrictness.Normal, "Normal: yellow from 4 points, red from 8"),
+        new(LightStrictness.Relaxed, "Relaxed: yellow from 8 points, red from 16"),
+    ];
 
     static readonly Dictionary<OverlayCorner, string> CornerNames = new()
     {
@@ -602,6 +608,10 @@ public partial class MainWindow : Window
         TrafficLightScaleSlider.Value = s.TrafficLightScale;
         TrafficLightMinutesBox.ItemsSource = LightMinutes;
         TrafficLightMinutesBox.SelectedItem = LightMinutes.Contains(s.TrafficLightGameMinutes) ? s.TrafficLightGameMinutes : 60;
+        TrafficLightStrictnessBox.ItemsSource = StrictnessNames;
+        TrafficLightStrictnessBox.DisplayMemberPath = "Value";
+        TrafficLightStrictnessBox.SelectedValuePath = "Key";
+        TrafficLightStrictnessBox.SelectedValue = s.TrafficLightStrictness;
         AlertsStatus.Text = DescribeAlerts(s);
     }
 
@@ -683,6 +693,7 @@ public partial class MainWindow : Window
         s.TrafficLightCorner = TrafficLightCornerBox.SelectedValue is OverlayCorner corner ? corner : OverlayCorner.TopCenter;
         s.TrafficLightScale = Math.Round(TrafficLightScaleSlider.Value, 1);
         s.TrafficLightGameMinutes = TrafficLightMinutesBox.SelectedItem is int minutes ? minutes : 60;
+        s.TrafficLightStrictness = TrafficLightStrictnessBox.SelectedValue is LightStrictness strictness ? strictness : LightStrictness.Normal;
         s.Save();
         UpdateOverlay();
         return DescribeAlerts(s);

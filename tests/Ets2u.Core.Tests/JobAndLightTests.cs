@@ -363,26 +363,51 @@ public class DriveStatusTests
     }
 
     [Theory]
-    [InlineData(30, AlertLevel.Yellow, AlertLevel.Red)]   // 1 yellow scores 20, 1 red 40
-    [InlineData(60, null, AlertLevel.Yellow)]               // 10 and 20
-    [InlineData(120, null, null)]                           // 5 and 10
-    public void OneEventWeighsWhatItWouldInATripAsLongAsTheWindow(int window, AlertLevel? oneYellow, AlertLevel? oneRed)
+    [InlineData(30)]
+    [InlineData(60)]
+    [InlineData(120)]
+    public void OneEventWeighsTheSameInEveryWindow(int window)
     {
-        var status = new DriveStatus { WindowMinutes = window };
-        var now = T0;
-        Event(status, now, AlertLevel.Yellow);
-        Assert.Equal(oneYellow, status.Level);
-        Assert.Equal(10.0 * 60 / window, status.Score, 3);
+        foreach (var strictness in Enum.GetValues<LightStrictness>())
+        {
+            var yellow = new DriveStatus { WindowMinutes = window, Strictness = strictness };
+            Event(yellow, T0, AlertLevel.Yellow);
+            Assert.Null(yellow.Level); // one yellow never lights the light on its own
 
-        var red = new DriveStatus { WindowMinutes = window };
-        Event(red, now, AlertLevel.Red);
-        Assert.Equal(oneRed, red.Level);
+            var red = new DriveStatus { WindowMinutes = window, Strictness = strictness };
+            Event(red, T0, AlertLevel.Red);
+            Assert.Equal(strictness == LightStrictness.Realistic ? AlertLevel.Yellow : null, red.Level);
+        }
     }
+
+    [Theory]
+    [InlineData(LightStrictness.Realistic, 2, 4)]
+    [InlineData(LightStrictness.Normal, 4, 8)]
+    [InlineData(LightStrictness.Relaxed, 8, 16)]
+    public void EachStrictnessDoublesTheEventsItTakes(LightStrictness strictness, int yellowFrom, int redFrom)
+    {
+        foreach (var window in new[] { 30, 60, 120 })
+        {
+            var status = new DriveStatus { WindowMinutes = window, Strictness = strictness };
+            Assert.Equal(yellowFrom, status.YellowFrom);
+            Assert.Equal(redFrom, status.RedFrom);
+            var now = T0;
+            for (var points = 1; points <= redFrom; points++)
+            {
+                now += TimeSpan.FromSeconds(1);
+                Event(status, now, AlertLevel.Yellow);
+                Assert.Equal(points >= redFrom ? AlertLevel.Red : points >= yellowFrom ? AlertLevel.Yellow : null, status.Level);
+            }
+        }
+    }
+
+    [Fact]
+    public void NormalIsTheDefault() => Assert.Equal(LightStrictness.Normal, new DriveStatus().Strictness);
 
     [Fact]
     public void ARunOfEventsTurnsItRedAndItEasesBackAsTheyAreDrivenPast()
     {
-        var status = new DriveStatus { WindowMinutes = 60 };
+        var status = new DriveStatus { WindowMinutes = 60, Strictness = LightStrictness.Realistic };
         var now = T0;
         Drive(status, ref now, TimeSpan.FromMinutes(10));
         Event(status, now, AlertLevel.Red);
@@ -415,15 +440,15 @@ public class DriveStatusTests
             status.Step(now, 20, 20, detector.Update(now, -g, 0, 20, 0));
         }
         Assert.Equal(2, status.Points);
-        Assert.Equal(20, status.Score, 3);
     }
 
     [Fact]
     public void StandingStillOrPausedDoesntAgeTheWindow()
     {
-        var status = new DriveStatus { WindowMinutes = 30 };
+        var status = new DriveStatus { WindowMinutes = 30, Strictness = LightStrictness.Realistic };
         var now = T0;
         Drive(status, ref now, TimeSpan.FromMinutes(5));
+        Event(status, now, AlertLevel.Red);
         Event(status, now, AlertLevel.Red);
         Drive(status, ref now, TimeSpan.FromMinutes(60), speedMs: 0); // a break at a stop
         for (var i = 0; i < 100; i++)
@@ -431,7 +456,7 @@ public class DriveStatusTests
             now += TimeSpan.FromSeconds(1);
             status.Step(now, null, 20, []); // paused
         }
-        Assert.Equal(2, status.Points);
+        Assert.Equal(4, status.Points);
         Assert.Equal(AlertLevel.Red, status.Level);
     }
 

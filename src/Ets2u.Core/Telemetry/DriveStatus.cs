@@ -1,17 +1,25 @@
 namespace Ets2u.Core.Telemetry;
 
+/// <summary>How many events it takes for the traffic light to stay yellow or red.</summary>
+public enum LightStrictness
+{
+    /// <summary>Yellow from 2 points, red from 4 (GreenRoad's bands over an hour).</summary>
+    Realistic,
+    /// <summary>Twice as many: yellow from 4 points, red from 8.</summary>
+    Normal,
+    /// <summary>Four times as many: yellow from 8 points, red from 16.</summary>
+    Relaxed,
+}
+
 /// <summary>
-/// The traffic light's steady colour: the trip summary's safety score (yellow events + 2 x red, per 10
-/// hours of driving, see <see cref="TripSummary.Score"/>) taken over only the last
-/// <see cref="WindowMinutes"/> of driving, in game time, and the events in that stretch. It rolls on as
-/// you drive: each event drops out once the window has been driven past it, so the light eases back to
-/// green, and one event alone weighs as much as it would in a trip of that length (one red in 60 minutes
-/// scores 20, yellow; in 120 minutes, 10, green).
+/// The traffic light's steady colour: the points (yellow event 1, red 2) of the events in the last
+/// <see cref="WindowMinutes"/> of driving, in game time, against fixed thresholds set by
+/// <see cref="Strictness"/>. The thresholds are the same whatever the window's length, so one event
+/// weighs the same in every window; the window only sets how long an event is remembered. It rolls on as
+/// you drive: each event drops out once the window has been driven past it, so the light eases back to green.
 ///
 /// The driving time is the trip's: game time spent moving (real time x the game's time scale), so standing
-/// still or a paused game doesn't age the window. The hours are always the window's full length, also
-/// before that much has been driven, so one event in the first minutes isn't blown up to a red.
-/// Fed by the telemetry reader thread only.
+/// still or a paused game doesn't age the window. Fed by the telemetry reader thread only.
 /// </summary>
 public sealed class DriveStatus
 {
@@ -42,11 +50,24 @@ public sealed class DriveStatus
     /// <summary>Game driving time the window holds so far (up to its length).</summary>
     public TimeSpan Driven => _driven;
 
-    /// <summary>Events per 10 hours over the window, the window's full length counting as the hours.</summary>
-    public double Score => _points / (WindowMinutes / 60.0) * 10;
+    /// <summary>How many points the light takes to stay yellow or red.</summary>
+    public LightStrictness Strictness { get; set; } = LightStrictness.Normal;
 
-    /// <summary>The steady colour, by the trip summary's bands; null is green.</summary>
-    public AlertLevel? Level => TripSummary.Band(Score);
+    /// <summary>Points from which the light stays yellow.</summary>
+    public int YellowFrom => YellowPoints(Strictness);
+
+    /// <summary>Points from which the light stays red.</summary>
+    public int RedFrom => 2 * YellowFrom;
+
+    public static int YellowPoints(LightStrictness strictness) => strictness switch
+    {
+        LightStrictness.Realistic => 2,
+        LightStrictness.Relaxed => 8,
+        _ => 4,
+    };
+
+    /// <summary>The steady colour; null is green.</summary>
+    public AlertLevel? Level => _points >= RedFrom ? AlertLevel.Red : _points >= YellowFrom ? AlertLevel.Yellow : null;
 
     /// <summary>One reader step: the speed (null while paused, closed or the alerts are off), the game's time scale and the events that started or turned red.</summary>
     public void Step(DateTime now, float? speedMs, double scale, IEnumerable<DrivingEvent> news)
