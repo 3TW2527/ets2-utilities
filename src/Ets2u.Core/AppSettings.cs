@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Ets2u.Core;
@@ -58,6 +58,9 @@ public sealed class AppSettings
     public int TrafficLightGameMinutes { get; set; } = 60;
     /// <summary>How many events the light takes to stay yellow or red, the same in every window.</summary>
     public Telemetry.LightStrictness TrafficLightStrictness { get; set; } = Telemetry.LightStrictness.Normal;
+
+    /// <summary>The page the app showed last (its name, e.g. "DrivingTab"), so it opens there again.</summary>
+    public string? LastPage { get; set; }
 
     /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
     public bool RecordCoachJobs { get; set; } = true;

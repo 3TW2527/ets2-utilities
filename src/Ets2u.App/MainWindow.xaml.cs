@@ -32,12 +32,21 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Nav.SelectedItem = ModsPageTab;
+        // Opens on the page last shown (e.g. the Driving view left on another screen), else Start here.
+        Nav.SelectedItem = Nav.Items.OfType<TabItem>().FirstOrDefault(t => t.Name.Length > 0 && t.Name == _app.Settings.LastPage) ?? ModsPageTab;
+        Nav.SelectionChanged += (_, e) =>
+        {
+            if (e.OriginalSource != Nav || Nav.SelectedItem is not TabItem { Name.Length: > 0 } tab || tab.Name == _app.Settings.LastPage) return;
+            _app.Settings.LastPage = tab.Name;
+            try { _app.Settings.Save(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppDirs.Log("settings.json: " + ex.Message); }
+        };
         _app.StatusChanged += message => Dispatcher.Invoke(() => StatusText.Text = message);
         _app.Changed += () => Dispatcher.Invoke(RefreshAll);
         Loaded += (_, _) =>
         {
             InitPages();
+            InitDriving();
             // Coach jobs are summarised in the background, so the reader starts with the app.
             if (_app.Settings.RecordCoachJobs) _ = Hub;
             RefreshAll();
@@ -54,7 +63,11 @@ public partial class MainWindow : Window
             // The game can reset controls.sii when its control options change: set them up again.
             // if (_app.MouseControlsNeeded && !_app.GameRunning) Run(() => _app.SetMouseControls(true) + "Mouse driving controls set up again.");
         };
-        Activated += (_, _) => UpdateBanner();
+        Activated += (_, _) =>
+        {
+            UpdateBanner();
+            RefreshSteps();
+        };
         Closed += (_, _) =>
         {
             _downloadCts?.Cancel();

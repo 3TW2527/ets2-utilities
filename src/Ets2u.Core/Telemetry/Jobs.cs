@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -39,6 +39,17 @@ public sealed record JobSummary(
         lines.AddRange(Trip.ToText().Split(Environment.NewLine).Skip(1));
         return string.Join(Environment.NewLine, lines);
     }
+}
+
+/// <summary>Where a job being driven stands (see <see cref="JobText.Progress"/>).</summary>
+/// <param name="Stage">The stage being driven, from 1.</param>
+/// <param name="NextStop">The stop or city it's heading for; null when the game didn't name it.</param>
+/// <param name="Due">When it's due there, on the game's clock (minutes); null when not known.</param>
+public sealed record JobProgress(int Stage, int Stages, string? NextStop, uint? Due)
+{
+    /// <summary>"Due in 1 h 12 min", "Late by 5 min", or null when the due time or the clock isn't known.</summary>
+    public string? DueText(uint? now) => Due is not { } due || now is not { } clock ? null
+        : due >= clock ? "Due in " + JobText.Minutes(due - clock) : "Late by " + JobText.Minutes(clock - due);
 }
 
 /// <summary>Reading the plugin's "name=value" lines.</summary>
@@ -97,6 +108,33 @@ public static class JobText
         var source = Named(k => k.Contains("source", StringComparison.Ordinal));
         var target = Named(k => k.Contains("destination", StringComparison.Ordinal) || k.Contains("target", StringComparison.Ordinal));
         return source is null ? target ?? "" : target is null ? source : $"{source} → {target}";
+    }
+
+    /// <summary>
+    /// Where a job being driven stands: which stage of how many, the stop it's heading for, and when it's due
+    /// there (game minutes, as <see cref="GameClock"/>). A coach job's stage is bus.stages.current, counted
+    /// from 0; a truck job has one stage, due at its delivery time.
+    /// </summary>
+    public static JobProgress Progress(IReadOnlyDictionary<string, string> job)
+    {
+        if (Number(job.GetValueOrDefault("bus.stages.count")) is { } count && count >= 1)
+        {
+            var stages = (int)count;
+            var current = Math.Clamp((int)(Number(job.GetValueOrDefault("bus.stages.current")) ?? 0), 0, stages - 1);
+            var next = job.GetValueOrDefault($"destination_stop.name[{current}]") is { Length: > 0 } name ? name : null;
+            var due = Number(job.GetValueOrDefault($"destination_stop.arrival_time.planned[{current}]")) is { } d && d > 0 ? (uint)d : (uint?)null;
+            return new JobProgress(current + 1, stages, next, due);
+        }
+        var city = job.GetValueOrDefault("destination_city") is { Length: > 0 } c ? c : null;
+        var delivery = Number(job.GetValueOrDefault("delivery.time")) is { } t && t > 0 ? (uint)t : (uint?)null;
+        return new JobProgress(1, 1, city, delivery);
+    }
+
+    /// <summary>"1 h 12 min" or "12 min", from game minutes.</summary>
+    public static string Minutes(long minutes)
+    {
+        var m = Math.Abs(minutes);
+        return m >= 60 ? string.Create(CultureInfo.InvariantCulture, $"{m / 60} h {m % 60:00} min") : string.Create(CultureInfo.InvariantCulture, $"{m} min");
     }
 
     /// <summary>

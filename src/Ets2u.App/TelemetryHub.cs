@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using Ets2u.Core;
 using Ets2u.Core.Extract;
@@ -8,6 +8,9 @@ namespace Ets2u.App;
 
 /// <summary>An alert as the overlay shows it: a copy, so the UI never reads what the reader thread is changing.</summary>
 public sealed record AlertCard(DrivingEventKind Kind, DateTime Started, AlertLevel Level, string Title, string Detail, DateTime? Ended);
+
+/// <summary>The traffic light's steady reading: points in the window against the strictness's thresholds.</summary>
+public readonly record struct LightReading(int Points, int YellowFrom, int RedFrom, int WindowMinutes, AlertLevel? Level);
 
 /// <summary>Largest g in each direction since the last reset.</summary>
 public readonly record struct GPeaks(double Accel, double Brake, double Left, double Right);
@@ -47,6 +50,8 @@ public sealed class TelemetryHub : IDisposable
     GPeaks _peaks;
     IReadOnlyList<AlertCard> _alerts = [];
     AlertLevel? _recent;
+    LightReading _light;
+    uint? _gameMinute;
     int _savedRevision;
     DateTime _savedAt;
 
@@ -91,6 +96,18 @@ public sealed class TelemetryHub : IDisposable
     public AlertLevel? Recent
     {
         get { lock (_lock) return _recent; }
+    }
+
+    /// <summary>The light's points, thresholds and window, for the Driving view.</summary>
+    public LightReading Light
+    {
+        get { lock (_lock) return _light; }
+    }
+
+    /// <summary>The game's clock (minutes, see <see cref="GameClock"/>), also while paused; null when it isn't running.</summary>
+    public uint? GameMinute
+    {
+        get { lock (_lock) return _gameMinute; }
     }
 
     public DrivingThresholds ThresholdsFor(bool coach) =>
@@ -167,6 +184,8 @@ public sealed class TelemetryHub : IDisposable
             _coach = coach;
             _alerts = cards;
             _recent = _status.Level;
+            _light = new LightReading(_status.Points, _status.YellowFrom, _status.RedFrom, _status.WindowMinutes, _status.Level);
+            _gameMinute = (frame ?? raw)?.GameMinute;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));

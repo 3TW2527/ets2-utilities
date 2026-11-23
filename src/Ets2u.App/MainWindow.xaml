@@ -20,6 +20,12 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,6"/>
         </Style>
+        <!-- What you must see: a short line that always shows (the rest is in the info tips). -->
+        <Style TargetType="TextBlock" x:Key="Must">
+            <Setter Property="Foreground" Value="#7A4A00"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,4"/>
+        </Style>
         <Style TargetType="TextBlock" x:Key="Status" BasedOn="{StaticResource Note}">
             <Setter Property="Foreground" Value="#1F5F99"/>
         </Style>
@@ -39,6 +45,21 @@
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="Margin" Value="0,16,0,0"/>
+        </Style>
+        <Style TargetType="Border" x:Key="StepCard">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D8E0EA"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14,12"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+        <Style TargetType="Border" x:Key="StepNumber">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="CornerRadius" Value="13"/>
+            <Setter Property="Background" Value="#2F6FB0"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
         </Style>
         <BooleanToVisibilityConverter x:Key="BoolToVisible"/>
         <local:ChevronAngleConverter x:Key="ChevronAngle"/>
@@ -106,12 +127,50 @@
             <!-- ================= OVERVIEW ================= -->
             <TabItem Header="OVERVIEW" Tag="group" IsEnabled="False" Focusable="False"/>
 
-            <TabItem x:Name="ModsPageTab" Header="Mods &amp; plugins">
+            <TabItem x:Name="ModsPageTab" Header="Start here">
                 <DockPanel Margin="20,16,20,20">
-                    <StackPanel DockPanel.Dock="Top">
-                        <TextBlock Style="{StaticResource Title}" Text="Mods &amp; plugins"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Everything this app puts into the game, in one place. Rebuild after a game update if something looks wrong (the app also does it by itself on start), and reinstall the plugin after updating the app. Double-click a row to open its page."/>
+                    <StackPanel DockPanel.Dock="Top" MaxWidth="900" HorizontalAlignment="Left">
+                        <local:PageHeader Title="Start here" Subtitle="Three steps: pick what you want, apply it, then switch it on in the game."
+                                          Info="Every mod the app makes is marked optional for Convoy and named with your own tag, so it never clashes with another player's copy."/>
+                        <UniformGrid Columns="3" Margin="0,4,0,0">
+                            <Border Style="{StaticResource StepCard}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="1" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                        <TextBlock Text="Pick" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Text="Choose a feature in the list on the left. Each page says what it does and what it needs."/>
+                                    <TextBlock x:Name="StepPickStatus" Style="{StaticResource Status}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource StepCard}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="2" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                        <TextBlock Text="Apply" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Text="Set it up and press Apply at the bottom of its page. Close ETS2 first: mods and saves can't change while it runs."/>
+                                    <TextBlock x:Name="StepApplyStatus" Style="{StaticResource Status}" Margin="0,8,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource StepCard}" Margin="0">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border Style="{StaticResource StepNumber}"><TextBlock Text="3" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                        <TextBlock Text="Switch on in the game" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                                               Text="Enable new mods once in the game's Mod Manager. Overlays, alerts and summaries need the plugin, installed once."/>
+                                    <TextBlock x:Name="StepGameStatus" Style="{StaticResource Status}" Margin="0,8,0,0"/>
+                                    <Button x:Name="StartInstallPluginButton" Content="Install plugin" Click="InstallPlugin_Click"
+                                            HorizontalAlignment="Left" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <local:Heading Text="What's in the game"
+                                       Info="Everything this app puts into the game, with its file and state. Double-click a row to open its page. After a game update the app rebuilds the mods by itself when it starts; Rebuild all mods does it now. Reinstall the plugin after updating the app."/>
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Bottom">
                         <WrapPanel Margin="0,10,0,0">
@@ -120,8 +179,6 @@
                             <Button x:Name="RemovePluginButton" Content="Remove plugin" Click="RemovePlugin_Click" Margin="0,0,8,6"/>
                             <Button Content="Open mod folder" Click="OpenModFolder_Click" Margin="0,0,8,6"/>
                         </WrapPanel>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Every mod here is marked optional for Convoy and named with your own tag, so it never clashes with another player's copy. The first time a mod is created, enable it once in the game's Mod Manager."/>
                     </StackPanel>
                     <DataGrid x:Name="ModsGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Single"
@@ -142,10 +199,10 @@
                 </DockPanel>
             </TabItem>
 
-            <TabItem Header="Game &amp; profiles">
+            <TabItem x:Name="GameTab" Header="Game &amp; profiles">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="20,16,20,20">
-                        <TextBlock Style="{StaticResource Title}" Text="Game &amp; profiles"/>
+                        <local:PageHeader Title="Game &amp; profiles" Subtitle="Where the app found ETS2, and your profiles and saves."/>
                         <ItemsControl x:Name="PathRows" ItemTemplate="{StaticResource KeyValueRow}" Margin="0,6,0,0"/>
 
                         <TextBlock Style="{StaticResource H}" Text="Profiles"/>
@@ -172,11 +229,10 @@
             <TabItem x:Name="NoDamageTab" Header="No damage">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="No damage"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_nodamage. Built from the game's own damage file, so it follows game updates."/>
-                        <CheckBox x:Name="NoDamageBox" Content="No damage or wear for trucks, coaches, trailers and cargo" Margin="0,8,0,0"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Turn off the workshop &quot;No Damage&quot; mod so the two don't conflict."/>
+                        <local:PageHeader Title="No damage" Subtitle="No damage or wear for trucks, coaches, trailers and cargo." Needs="Mod"
+                                          Info="Mod: ets2u_nodamage. Built from the game's own damage file, so it follows game updates."/>
+                        <CheckBox x:Name="NoDamageBox" Content="No damage or wear" Margin="0,8,0,0"/>
+                        <TextBlock Style="{StaticResource Must}" Text="Turn off any Workshop &quot;No Damage&quot; mod: the two conflict."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyNoDamage_Click" HorizontalAlignment="Left"/>
@@ -190,8 +246,8 @@
             <TabItem x:Name="EarningsTab" Header="Bigger earnings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Bigger earnings (trucks)"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_economy."/>
+                        <local:PageHeader Title="Bigger earnings" Subtitle="Multiplies the pay and XP of truck jobs." Needs="Mod"
+                                          Info="Mod: ets2u_economy. Coach jobs have no pay or XP rates in the game files, so this only changes truck jobs. For coaches, set money and coach XP on the Money &amp; XP page."/>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="120"/>
@@ -211,8 +267,7 @@
                                     IsSnapToTickEnabled="True" Margin="0,4" ValueChanged="Slider_Changed"/>
                             <TextBlock x:Name="XpLabel" Grid.Row="1" Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0"/>
                         </Grid>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Coach jobs have no pay or XP rates in the game files, so this only changes truck jobs. For coaches, set money and coach XP on the Money &amp; XP page. Turn off the workshop money/XP mod: it overrides the same file."/>
+                        <TextBlock Style="{StaticResource Must}" Text="Truck jobs only. Turn off any Workshop money or XP mod: it overrides the same file."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyEarnings_Click" HorizontalAlignment="Left"/>
@@ -226,12 +281,11 @@
             <TabItem x:Name="CoachTab" Header="Coach passengers">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Coach passengers"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_coach. What upsets passengers, and how much g-force they take."/>
+                        <local:PageHeader Title="Coach passengers" Subtitle="What upsets passengers, and how much g-force they take." Needs="Mod"
+                                          Info="Mod: ets2u_coach."/>
 
-                        <TextBlock Style="{StaticResource H}" Text="G-force: when passengers complain"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="The game checks the g-force three ways: across the coach (cornering), up and down (bumps and crests) and along it (accelerating and braking). Past the normal limit passengers lose a little satisfaction; past the harsh one, a lot. The game itself has a harsh limit for braking only, so however hard you take a corner it costs only the small penalty; here every direction has one. The Stock starting point keeps the game's numbers (0.61 g normal) and uses its braking harsh limit (1.12 g) everywhere."/>
+                        <local:Heading Text="G-force: when passengers complain"
+                                       Info="The game checks the g-force three ways: across the coach (cornering), up and down (bumps and crests) and along it (accelerating and braking). Past the normal limit passengers lose a little satisfaction; past the harsh one, a lot. The game itself has a harsh limit for braking only, so however hard you take a corner it costs only the small penalty; here every direction has one. The Stock starting point keeps the game's numbers (0.61 g normal) and uses its braking harsh limit (1.12 g) everywhere. The driving alerts can use these limits: yellow at the normal limit, red at the harsh one (Driving alerts page)."/>
                         <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
                             <TextBlock Text="Start from" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox x:Name="GPresetBox" Width="150" SelectionChanged="GPreset_Changed"/>
@@ -266,11 +320,10 @@
                             <TextBlock Grid.Row="4" Grid.Column="2" Grid.ColumnSpan="2" Style="{StaticResource Note}" VerticalAlignment="Center"
                                        Text="Empty: never (same as the switch below)"/>
                         </Grid>
-                        <TextBlock Style="{StaticResource Note}" Margin="0,8,0,0"
-                                   Text="The driving alerts can use these limits: yellow at the normal limit, red at the harsh one (Driving alerts page)."/>
                         <TextBlock x:Name="GLimitsNote" Style="{StaticResource Note}"/>
 
-                        <TextBlock Style="{StaticResource H}" Text="What lowers satisfaction"/>
+                        <local:Heading Text="What lowers satisfaction"
+                                       Info="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The game's g-force meter can be hidden with the game's own switch in its options."/>
                         <TextBlock Text="These no longer lower passenger satisfaction:" Margin="0,0,0,4"/>
                         <WrapPanel x:Name="CoachFactorPanel" Margin="12,0,0,0">
                             <CheckBox Tag="DrivingStyle" Content="Driving style (any g-force, whatever the limits above)" Width="440" Margin="0,3"/>
@@ -286,8 +339,7 @@
                         </StackPanel>
                         <CheckBox x:Name="CoachJobFailureBox" Content="Extreme g-force no longer fails the job" Margin="0,10,0,0"/>
                         <CheckBox x:Name="CoachFullBox" Content="Passengers board fully satisfied" Margin="0,6,0,0"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Anything left unticked works as normal, and rewards for smooth, on-time driving always stay. The game's g-force meter can be hidden with the game's own switch in its options. Turn off other mods that change def/bus_economy_data.sii (such as g-force or passenger mods from the Workshop): only one of them can win."/>
+                        <TextBlock Style="{StaticResource Must}" Text="Turn off other g-force or passenger mods from the Workshop: only one of them can win."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyCoach_Click" HorizontalAlignment="Left"/>
@@ -301,10 +353,10 @@
             <TabItem x:Name="HudTab" Header="HUD">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="HUD"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Mod: ets2u_ui (&quot;ETS2 Utilities: HUD&quot; in Mod Manager). Changes to the game's on-screen display."/>
+                        <local:PageHeader Title="HUD" Subtitle="Moves the route advisor map to the other side of the screen." Needs="Mod"
+                                          Info="Mod: ets2u_ui (&quot;ETS2 Utilities: HUD&quot; in Mod Manager). To hide the coaches' g-force meter on the route advisor, use the game's own switch in its options; no mod is needed."/>
 
-                        <TextBlock Style="{StaticResource H}" Text="Route advisor map"/>
+                        <local:Heading Text="Route advisor map"/>
                         <TextBlock x:Name="MapNote" Style="{StaticResource Note}"/>
                         <CheckBox x:Name="MapBox" Content="Move the route advisor map" Margin="0,6,0,0"/>
                         <StackPanel Margin="20,6,0,0">
@@ -313,8 +365,6 @@
                             <RadioButton x:Name="MapRight" Content="Always bottom-right" Margin="0,2"/>
                         </StackPanel>
 
-                        <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
-                                   Text="To hide the coaches' g-force meter on the route advisor, use the game's own switch in its options; no mod is needed."/>
                         <Border Style="{StaticResource ApplyBar}">
                             <StackPanel>
                                 <Button Content="Apply" Click="ApplyHud_Click" HorizontalAlignment="Left"/>
@@ -328,9 +378,8 @@
             <TabItem x:Name="BusDisplayTab" Header="Destination display">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Coach destination display"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Mod: ets2u_busdisplay. Puts your own text on the front destination display of the coaches (the &quot;standard destination display&quot; upgrade). Without {destination} in the text, it shows with or without a job, whenever the ignition is on."/>
+                        <local:PageHeader Title="Destination display" Subtitle="Your own text on the coaches' front destination display." Needs="Mod"
+                                          Info="Mod: ets2u_busdisplay. Works on coaches with the &quot;standard destination display&quot; upgrade. Without {destination} in the text, it shows with or without a job, whenever the ignition is on."/>
                         <CheckBox x:Name="BusDisplayBox" Content="Show my own text on the destination display" Margin="0,8,0,0"/>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
@@ -367,9 +416,8 @@
                         </Border>
                         <TextBlock x:Name="BusDisplayNote" Style="{StaticResource Note}" Margin="0,6,0,0"/>
 
-                        <TextBlock Style="{StaticResource H}" Text="Saved texts"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Keep as many texts as you like (millions are fine): one per line in a text file, &quot;route | text&quot; or just &quot;text&quot;. Search it, pick one, apply. Only the first 1,000 matches are listed."/>
+                        <local:Heading Text="Saved texts"
+                                       Info="Keep as many texts as you like (millions are fine): one per line in a text file, &quot;route | text&quot; or just &quot;text&quot;. Search it, pick one, apply. Only the first 1,000 matches are listed."/>
                         <Grid Margin="0,4,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="50"/>
@@ -402,8 +450,7 @@
             <TabItem x:Name="LiveryTab" Header="Livery pack">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}" MaxWidth="900">
-                        <TextBlock Style="{StaticResource Title}" Text="Livery pack"/>
-                        <TextBlock x:Name="LiveryIntro" Style="{StaticResource Note}"/>
+                        <local:PageHeader x:Name="LiveryHeader" Title="Livery pack" Subtitle="Packs the coach liveries you choose into one optional mod." Needs="Mod"/>
 
                         <Border Background="#FDECEA" BorderBrush="#C62828" BorderThickness="2" CornerRadius="4" Padding="12,10" Margin="0,8,0,4">
                             <StackPanel>
@@ -416,9 +463,8 @@
 
                         <CheckBox x:Name="LiveryEnabledBox" Content="Make the livery pack (optional: off by default)" Margin="0,10,0,0"/>
 
-                        <TextBlock Style="{StaticResource H}" Text="Mods in the pack"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Untick a mod to leave it out without forgetting it. If two mods hold the same file, the one higher in the list wins. Click a name to rename it."/>
+                        <local:Heading Text="Mods in the pack"
+                                       Info="Untick a mod to leave it out without forgetting it. If two mods hold the same file, the one higher in the list wins. Click a name to rename it."/>
                         <DataGrid x:Name="LiverySourceGrid" AutoGenerateColumns="False" HeadersVisibility="Column" Height="200"
                                   GridLinesVisibility="Horizontal" CanUserAddRows="False" CanUserDeleteRows="False"
                                   SelectionMode="Single" CanUserSortColumns="False">
@@ -448,9 +494,8 @@
                                     ToolTip="Downloads Workshop items in the list that aren't on this PC yet, or have been updated on the Workshop"/>
                         </WrapPanel>
 
-                        <TextBlock Style="{StaticResource H}" Text="Add from the Steam Workshop by link"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Paste a Workshop link or ID and press Check: the app reads the item from Steam and shows what it is before anything is downloaded. Adding it downloads it into the app (with DepotDownloader), so you don't subscribe and no extra mod shows up in Mod Manager. The app checks for updates every time it starts."/>
+                        <local:Heading Text="Add from the Steam Workshop by link"
+                                       Info="Paste a Workshop link or ID and press Check: the app reads the item from Steam and shows what it is before anything is downloaded. Adding it downloads it into the app (with DepotDownloader), so you don't subscribe and no extra mod shows up in Mod Manager. The app checks for updates every time it starts."/>
                         <StackPanel Orientation="Horizontal" Margin="0,2,0,6">
                             <TextBox x:Name="WorkshopIdBox" Width="420" Margin="0,0,8,0" KeyDown="WorkshopIdBox_KeyDown"/>
                             <Button x:Name="WorkshopCheckButton" Content="Check" Click="WorkshopCheck_Click" MinWidth="70"/>
@@ -486,9 +531,8 @@
                             <Button x:Name="SteamSignOutButton" Content="Forget sign-in" Click="SteamSignOut_Click"/>
                         </StackPanel>
 
-                        <TextBlock Style="{StaticResource H}" Text="Workshop items you're subscribed to"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Items Steam has already downloaded for you can be added from this list; Steam keeps them up to date. If you unsubscribe from one later, the app downloads its own copy."/>
+                        <local:Heading Text="Workshop items you're subscribed to"
+                                       Info="Items Steam has already downloaded for you can be added from this list; Steam keeps them up to date. If you unsubscribe from one later, the app downloads its own copy."/>
                         <CheckBox x:Name="WorkshopLiveriesOnlyBox" Content="Only show mods with paint jobs" IsChecked="True"
                                   Margin="0,2,0,6" Click="WorkshopFilter_Click"/>
                         <DataGrid x:Name="WorkshopGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
@@ -520,8 +564,10 @@
                                     <ProgressBar x:Name="LiveryProgress" Width="220" Height="14" Visibility="Collapsed" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock x:Name="LiveryStatus" Style="{StaticResource Status}" Margin="0,6,0,0"/>
-                                <TextBlock Style="{StaticResource Note}"
-                                           Text="After enabling the pack in Mod Manager, turn off any original livery mods you're subscribed to, so each livery isn't loaded twice (items added by link were never subscribed, so there's nothing to turn off). The pack is rebuilt whenever one of its mods updates."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Must}" Text="Then enable the pack in Mod Manager and turn off the original livery mods."/>
+                                    <local:InfoTip Text="So each livery isn't loaded twice. Items added by link were never subscribed, so there's nothing to turn off for them. The pack is rebuilt whenever one of its mods updates."/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -531,8 +577,7 @@
             <TabItem x:Name="OptionalTab" Header="Make optional">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}" MaxWidth="900">
-                        <TextBlock Style="{StaticResource Title}" Text="Make optional"/>
-                        <TextBlock x:Name="OptionalIntro" Style="{StaticResource Note}"/>
+                        <local:PageHeader x:Name="OptionalHeader" Title="Make optional" Subtitle="Optional copies of your mods, so Convoy players without them can still join." Needs="Mod"/>
 
                         <Border Background="#FDECEA" BorderBrush="#C62828" BorderThickness="2" CornerRadius="4" Padding="12,10" Margin="0,8,0,4">
                             <StackPanel>
@@ -543,9 +588,8 @@
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Style="{StaticResource H}" Text="Mods with an optional copy"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Untick a mod to remove its copy from the mod folder without forgetting it. Click a name to rename it (the copy shows in Mod Manager as that name with &quot;(optional)&quot;)."/>
+                        <local:Heading Text="Mods with an optional copy"
+                                       Info="Untick a mod to remove its copy from the mod folder without forgetting it. Click a name to rename it (the copy shows in Mod Manager as that name with &quot;(optional)&quot;)."/>
                         <DataGrid x:Name="OptionalGrid" AutoGenerateColumns="False" HeadersVisibility="Column" Height="180"
                                   GridLinesVisibility="Horizontal" CanUserAddRows="False" CanUserDeleteRows="False"
                                   SelectionMode="Single" CanUserSortColumns="False">
@@ -571,9 +615,8 @@
                             <Button Content="Open Workshop page" Click="OptionalPage_Click" Margin="0,0,8,6"/>
                         </WrapPanel>
 
-                        <TextBlock Style="{StaticResource H}" Text="Workshop items you're subscribed to"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Pick one or more and press Make optional. Steam keeps the originals up to date, and the app rebuilds a copy on start when its original changes."/>
+                        <local:Heading Text="Workshop items you're subscribed to"
+                                       Info="Pick one or more and press Make optional. Steam keeps the originals up to date, and the app rebuilds a copy on start when its original changes."/>
                         <CheckBox x:Name="OptionalNotOptionalOnlyBox" Content="Only show mods that aren't optional yet" IsChecked="True"
                                   Margin="0,2,0,6" Click="OptionalFilter_Click"/>
                         <DataGrid x:Name="OptionalWorkshopGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
@@ -599,8 +642,10 @@
                                     <ProgressBar x:Name="OptionalProgress" Width="220" Height="14" Visibility="Collapsed" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock x:Name="OptionalStatus" Style="{StaticResource Status}" Margin="0,6,0,0"/>
-                                <TextBlock Style="{StaticResource Note}"
-                                           Text="Then in Mod Manager: enable the copy and switch the original off, so the mod isn't loaded twice and Convoy doesn't ask the other players for the original. You can stay subscribed: a subscribed mod that's switched off isn't needed to join."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Must}" Text="Then in Mod Manager: enable the copy and switch the original off."/>
+                                    <local:InfoTip Text="So the mod isn't loaded twice and Convoy doesn't ask the other players for the original. You can stay subscribed: a subscribed mod that's switched off isn't needed to join."/>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -610,12 +655,118 @@
             <!-- ================= PLUGIN ================= -->
             <TabItem Header="WITH THE PLUGIN" Tag="group" IsEnabled="False" Focusable="False"/>
 
+            <!-- The page to leave open on another screen while driving: figures, little text. It scales with the window. -->
+            <TabItem x:Name="DrivingTab" Header="Driving view">
+                <Grid Background="#12161B">
+                    <Grid.Resources>
+                        <Style TargetType="Border" x:Key="Card">
+                            <Setter Property="Background" Value="#1C232B"/>
+                            <Setter Property="CornerRadius" Value="10"/>
+                            <Setter Property="Padding" Value="18,14"/>
+                            <Setter Property="Margin" Value="6"/>
+                        </Style>
+                        <Style TargetType="TextBlock" x:Key="Label">
+                            <Setter Property="Foreground" Value="#8B98A6"/>
+                            <Setter Property="FontSize" Value="13"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Style>
+                        <Style TargetType="TextBlock" x:Key="Big">
+                            <Setter Property="Foreground" Value="#E8EDF2"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Style>
+                        <Style TargetType="Ellipse" x:Key="Lamp">
+                            <Setter Property="Width" Value="62"/>
+                            <Setter Property="Height" Value="62"/>
+                            <Setter Property="Margin" Value="0,0,12,0"/>
+                        </Style>
+                    </Grid.Resources>
+                    <Viewbox Stretch="Uniform" Margin="10">
+                        <Grid Width="980" Height="600">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="36"/>
+                                <RowDefinition Height="250"/>
+                                <RowDefinition Height="170"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="330"/>
+                                <ColumnDefinition Width="260"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Top line: the game's clock and what's going on. -->
+                            <DockPanel Grid.ColumnSpan="3" Margin="8,0">
+                                <TextBlock x:Name="DriveClock" DockPanel.Dock="Right" Style="{StaticResource Big}" FontSize="22" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="DriveState" Style="{StaticResource Label}" FontSize="16" VerticalAlignment="Center"/>
+                            </DockPanel>
+
+                            <!-- The traffic light. -->
+                            <Border Grid.Row="1" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource Label}" Text="RECENT DRIVING"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <Ellipse x:Name="DriveLampGreen" Style="{StaticResource Lamp}"/>
+                                        <Ellipse x:Name="DriveLampYellow" Style="{StaticResource Lamp}"/>
+                                        <Ellipse x:Name="DriveLampRed" Style="{StaticResource Lamp}" Margin="0"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <TextBlock x:Name="DrivePoints" Style="{StaticResource Big}" FontSize="44"/>
+                                        <TextBlock x:Name="DrivePointsOf" Style="{StaticResource Label}" FontSize="20" VerticalAlignment="Bottom" Margin="8,0,0,8"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="DriveLightNote" Style="{StaticResource Label}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Speed. -->
+                            <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}">
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource Label}" Text="SPEED"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                            <TextBlock x:Name="DriveSpeed" Style="{StaticResource Big}" FontSize="96"/>
+                                            <TextBlock Style="{StaticResource Label}" FontSize="20" Text="km/h" VerticalAlignment="Bottom" Margin="6,0,0,22"/>
+                                        </StackPanel>
+                                        <TextBlock x:Name="DriveSpeedMph" Style="{StaticResource Label}" FontSize="20"/>
+                                    </StackPanel>
+                                    <Grid x:Name="DriveLimitSign" Width="64" Height="64" HorizontalAlignment="Right" VerticalAlignment="Top">
+                                        <Ellipse Fill="White" Stroke="#D32F2F" StrokeThickness="7"/>
+                                        <TextBlock x:Name="DriveLimit" FontSize="24" FontWeight="Bold" Foreground="#111"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+
+                            <!-- The job. -->
+                            <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}">
+                                <StackPanel>
+                                    <TextBlock x:Name="DriveJobLabel" Style="{StaticResource Label}" Text="JOB"/>
+                                    <TextBlock x:Name="DriveRoute" Style="{StaticResource Big}" FontSize="28" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                    <TextBlock x:Name="DriveStage" Style="{StaticResource Label}" FontSize="18" Margin="0,8,0,0"/>
+                                    <TextBlock x:Name="DriveNext" Style="{StaticResource Big}" FontSize="22" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="DriveDue" FontSize="26" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Events of the trip or job, and its score. -->
+                            <UniformGrid x:Name="DriveCounts" Grid.Row="2" Grid.ColumnSpan="3" Columns="5"/>
+
+                            <!-- Totals and the latest event. -->
+                            <Border Grid.Row="3" Grid.ColumnSpan="3" Style="{StaticResource Card}">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock x:Name="DriveTotals" Style="{StaticResource Big}" FontSize="22"/>
+                                    <TextBlock x:Name="DriveLast" Style="{StaticResource Label}" FontSize="18" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Viewbox>
+                </Grid>
+            </TabItem>
+
             <TabItem x:Name="OverlayTab" Header="Speed overlay">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Speed in km/h and mph"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="The game's dashboards have one speed field and the game picks its unit, so both units can't be shown there. Instead, a small plugin reads the truck's speed and this app shows it in both units in a corner of the screen. Keep this app open (minimised is fine) while you drive. It shows over the game in borderless or windowed mode; exclusive fullscreen may hide it."/>
+                        <local:PageHeader Title="Speed overlay" Subtitle="Your speed in km/h and mph in a corner of the screen." Needs="Plugin|App open while driving|Borderless or windowed game"
+                                          Info="The game's dashboards have one speed field and the game picks its unit, so both units can't be shown there. Instead, a small plugin reads the truck's speed and this app shows it in both units in a corner of the screen. Minimised is fine. Exclusive fullscreen may hide it."/>
                         <TextBlock x:Name="PluginStatus" Style="{StaticResource Status}"/>
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="InstallPluginButton" Content="Install plugin" Click="InstallPlugin_Click"/>
@@ -650,7 +801,9 @@
             <TabItem x:Name="AlertsTab" Header="Driving alerts">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Driving alerts, GreenRoad style"/>
+                        <local:PageHeader Title="Driving alerts" Subtitle="GreenRoad-style warnings for harsh acceleration, braking, cornering and speeding."
+                                          Needs="Plugin|App open while driving|Borderless or windowed game"
+                                          Info="When the g-force reaches yellow or red, the alert shows on screen: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds; the app tells which you're driving. Speeding shows in red while Speeding alerts is ticked; unticked, it isn't counted anywhere, trip and job summaries included."/>
                         <TextBlock x:Name="DrivingPluginStatus" Style="{StaticResource Status}"/>
                         <StackPanel Orientation="Horizontal">
                             <Button x:Name="InstallPluginButton2" Content="Install plugin" Click="InstallPlugin_Click"/>
@@ -694,17 +847,23 @@
                         <TextBlock x:Name="MouseDriveStatus" Style="{StaticResource Note}" Margin="0,6,0,0"/>
                         END OF MOUSE DRIVING -->
 
-                        <TextBlock Style="{StaticResource Note}" Margin="0,10,0,0"
-                                   Text="A card pops up at the top of the screen when the g-force reaches yellow or red: harsh acceleration, braking or cornering. Coaches and trucks each have their own switch and thresholds (below); the app tells which you&apos;re driving. Speeding shows in red, while Speeding alerts (below) is ticked; unticked, it isn't counted anywhere, trip and job summaries included. Keep this app open while you drive; like the speed overlay it shows in borderless or windowed mode."/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <local:Heading Text="Alert me"/>
+                        <StackPanel Orientation="Horizontal">
                             <CheckBox x:Name="CoachAlertsBox" Content="In coaches" Margin="0,0,24,0"/>
                             <CheckBox x:Name="TruckAlertsBox" Content="In trucks"/>
                         </StackPanel>
-                        <TextBlock Text="Show them as:" Margin="0,8,0,2"/>
-                        <CheckBox x:Name="AlertCardsBox" Margin="20,2,0,0"
-                                  Content="Cards at the top of the screen, with what happened and the peak g-force"/>
-                        <CheckBox x:Name="TrafficLightBox" Margin="20,4,0,0"
-                                  Content="A traffic light: green, yellow and red lamps in a row that flash on an event and stay lit for the recent driving"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,2">
+                            <TextBlock Text="Show them as"/>
+                            <local:InfoTip Text="Tick either, both or neither: with neither, the trip and job summaries still count every event."/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="20,2,0,0">
+                            <CheckBox x:Name="AlertCardsBox" Content="Cards at the top of the screen"/>
+                            <local:InfoTip Text="Each card says what happened and its peak g-force, and stays a few seconds after the event."/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="20,4,0,0">
+                            <CheckBox x:Name="TrafficLightBox" Content="A traffic light"/>
+                            <local:InfoTip Text="Green, yellow and red lamps in a row. An event flashes yellow or red for as long as a card would show. Between events one lamp stays lit for the recent driving. The light is hidden while the game is paused."/>
+                        </StackPanel>
                         <Grid Margin="40,4,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="50"/>
@@ -722,23 +881,22 @@
                                        Text="{Binding Value, ElementName=TrafficLightScaleSlider, StringFormat=x{0:0.0}}"/>
                         </Grid>
                         <StackPanel Orientation="Horizontal" Margin="40,4,0,0">
-                            <TextBlock Text="Between events, show how the last" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="TrafficLightMinutesBox" Width="60" Margin="6,0"/>
-                            <TextBlock Text="in-game minutes of driving went" VerticalAlignment="Center"/>
+                            <TextBlock Text="Remember events for" VerticalAlignment="Center" Width="130"/>
+                            <ComboBox x:Name="TrafficLightMinutesBox" Width="60"/>
+                            <TextBlock Text="in-game minutes of driving" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                            <local:InfoTip Text="Between events the light shows how the last stretch of driving went. Each event drops out once you've driven this far past it: 60 game minutes are about 3 real minutes on roads. Standing still or a paused game doesn't age it."/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="40,6,0,0">
-                            <TextBlock Text="Strictness" VerticalAlignment="Center" Width="70"/>
+                            <TextBlock Text="Strictness" VerticalAlignment="Center" Width="130"/>
                             <ComboBox x:Name="TrafficLightStrictnessBox" Width="300"/>
+                            <local:InfoTip Text="A yellow event counts 1 point, a red one 2. The light stays yellow or red once the remembered events reach these points, whatever the number of minutes above: Realistic yellow from 2 and red from 4 (GreenRoad over an hour), Normal 4 and 8, Relaxed 8 and 16."/>
                         </StackPanel>
-                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="Tick either, both or neither (with neither, the trip and job summaries still count every event). An event flashes the light yellow or red for as long as a card would show. Between events one lamp stays lit for the recent driving, scored like the trip summary (yellow events + 2 x red, per 10 hours) over only those last minutes of driving and the events in them: green under 20, yellow under 40, red from 40. With 60 minutes one red scores 20 (yellow), two reds 40 (red); with 120 one red stays green. Events drop out as you drive on (60 game minutes are about 3 real minutes on roads); standing still or a paused game doesn't age them, and the light is hidden while paused."/>
-                        <CheckBox x:Name="GMeterBox" Margin="0,10,0,0" Click="GMeter_Click" FontWeight="SemiBold"
-                                  Content="Show the live g-force meter (now and peak in each direction, coloured by these thresholds)"/>
-                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="A small floating window with the same reading the alerts use. Drag it where you like; it never takes the game's focus. Works whether the alerts are on or off. Up-and-down g isn't shown: the plugin doesn't send it, and no alert uses it."/>
-                        <TextBlock Style="{StaticResource H}" Text="Thresholds"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Coaches and trucks each take their thresholds from one of: the defaults (coaches 0.35 / 0.7 g, trucks 0.4 / 0.8 g, in every direction); the coach mod (the passengers' g-force limits on the Coach passengers page: yellow at the normal limit, red at the harsh one, cornering from the limit across the coach, accelerating and braking from the one along it); or your own numbers. The defaults and the coach mod can be relaxed by 10% or 20%."/>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <CheckBox x:Name="GMeterBox" Click="GMeter_Click" Content="Show the live g-force meter"/>
+                            <local:InfoTip Text="A small floating window with now and peak in each direction, coloured by these thresholds: the same reading the alerts use. Drag it where you like; it never takes the game's focus. Works whether the alerts are on or off. Up-and-down g isn't shown: the plugin doesn't send it, and no alert uses it."/>
+                        </StackPanel>
+                        <local:Heading Text="Thresholds"
+                                       Info="Coaches and trucks each take their thresholds from one of: the defaults (coaches 0.35 / 0.7 g, trucks 0.4 / 0.8 g, in every direction); the coach mod (the passengers' g-force limits on the Coach passengers page: yellow at the normal limit, red at the harsh one, cornering from the limit across the coach, accelerating and braking from the one along it); or your own numbers. The defaults and the coach mod can be relaxed by 10% or 20%."/>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="80"/>
@@ -816,14 +974,14 @@
             <TabItem x:Name="TripTab" Header="Trip summary">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Trip summary, GreenRoad style"/>
-                        <TextBlock Style="{StaticResource Note}"
-                                   Text="Press Start capturing before you set off and Stop capturing when you arrive. While it captures, every harsh acceleration, braking, cornering and speeding event is listed here with its time, using the thresholds on the Driving alerts page for the vehicle you&apos;re in, whether the alert cards are on or off (speeding only while Speeding alerts is ticked). Click an event for its details. Keep this app open while you drive; the trip is kept until you start the next one or close the app."/>
+                        <local:PageHeader Title="Trip summary" Subtitle="Every harsh event of a trip or coach job, with a GreenRoad-style safety score."
+                                          Needs="Plugin|App open while driving"
+                                          Info="Press Start capturing before you set off and Stop capturing when you arrive. Every harsh acceleration, braking, cornering and speeding event is listed with its time, using the thresholds on the Driving alerts page for the vehicle you're in, whether the alerts show or not (speeding only while Speeding alerts is ticked). Times are the game's clock, which doesn't change with time zones. Click an event for its details. The trip is kept until you start the next one or close the app."/>
                         <TextBlock x:Name="TripPluginStatus" Style="{StaticResource Status}"/>
-                        <CheckBox x:Name="RecordJobsBox" Margin="0,6,0,0" Click="RecordJobs_Click" FontWeight="SemiBold"
-                                  Content="Also keep a summary of every coach job, from when you take it to when it's delivered or cancelled"/>
-                        <TextBlock Style="{StaticResource Note}" Margin="20,2,0,0"
-                                   Text="Automatic: no buttons to press. Needs the plugin and this app open for the whole job. The last 200 jobs are kept; pick one under Show."/>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <CheckBox x:Name="RecordJobsBox" Click="RecordJobs_Click" Content="Also keep a summary of every coach job"/>
+                            <local:InfoTip Text="Automatic, from when you take the job to when it's delivered or cancelled: no buttons to press. Needs the plugin and this app open for the whole job. The last 200 jobs are kept; pick one under Show."/>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock Text="Show" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox x:Name="TripSourceBox" Width="520" SelectionChanged="TripSource_Changed"/>
@@ -956,11 +1114,11 @@
             <!-- ================= TOOLS ================= -->
             <TabItem Header="TOOLS" Tag="group" IsEnabled="False" Focusable="False"/>
 
-            <TabItem Header="Money &amp; XP">
+            <TabItem x:Name="MoneyTab" Header="Money &amp; XP">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <TextBlock Style="{StaticResource Title}" Text="Money &amp; XP"/>
-                        <TextBlock Style="{StaticResource Note}" Text="Edits a save in place (no mod). ETS2 must be closed."/>
+                        <local:PageHeader Title="Money &amp; XP" Subtitle="Sets the money and truck or coach XP in a save." Needs="Game closed"
+                                          Info="Edits a save in place: no mod is needed."/>
                         <Grid Margin="0,6,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="120"/>
@@ -1039,7 +1197,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Game information">
+            <TabItem x:Name="InfoTab" Header="Game information">
                 <Grid Margin="20,16,20,20">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1050,7 +1208,7 @@
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Title}" Text="Game information"/>
+                    <local:PageHeader Grid.ColumnSpan="3" Title="Game information" Subtitle="Fuel prices by country, and every city with its goto command."/>
 
                     <DockPanel Grid.Row="1">
                         <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Fuel prices" Margin="0,6,0,6"/>
@@ -1111,15 +1269,14 @@
                 </Grid>
             </TabItem>
 
-            <TabItem Header="Backups">
+            <TabItem x:Name="BackupsTab" Header="Backups">
                 <DockPanel Margin="20,16,20,20">
-                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Title}" Text="Backups"/>
+                    <local:PageHeader DockPanel.Dock="Top" Title="Backups" Subtitle="Every file the app changes is copied here first." Needs="Game closed to restore"
+                                      Info="Except the livery pack, which is rebuilt from its source mods. The newest 20 backups are kept."/>
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
                         <Button Content="Restore selected" Click="Restore_Click"/>
                         <Button Content="Open backup folder" Click="OpenBackups_Click"/>
                     </StackPanel>
-                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Note}"
-                               Text="Every file the app changes is copied here first (except the livery pack, which is rebuilt from its source mods). The newest 20 backups are kept. Close ETS2 before restoring."/>
                     <DataGrid x:Name="BackupGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
                               GridLinesVisibility="Horizontal" CanUserAddRows="False" SelectionMode="Single">
                         <DataGrid.Columns>

@@ -10,7 +10,7 @@ using Ets2u.Core.Telemetry;
 
 namespace Ets2u.App;
 
-/// <summary>The "Mods &amp; plugins" overview and the coach g-force limits.</summary>
+/// <summary>The "Start here" overview, the menu's on/off dots and the coach g-force limits.</summary>
 public partial class MainWindow
 {
     void InitPages()
@@ -33,12 +33,92 @@ public partial class MainWindow
     {
         var install = _app.Paths.InstallDir;
         return PluginInstaller.FindSource() is null ? "The plugin file (ets2u_telemetry.dll) isn't next to the app."
-            : !PluginInstaller.IsInstalled(install) ? "Plugin not installed yet: install it below or on the Mods & plugins page."
+            : !PluginInstaller.IsInstalled(install) ? "Plugin not installed yet: install it below or on the Start here page."
             : PluginInstaller.IsCurrent(install) ? "Plugin installed. ETS2 shows an \"SDK plugins\" notice when it starts; that's this plugin."
             : "An older plugin is installed: install it again, or these features won't work.";
     }
 
-    // ---------- Mods & plugins ----------
+    // ---------- Start here ----------
+
+    readonly Dictionary<TabItem, string> _navNames = new();
+
+    /// <summary>
+    /// Puts a dot before each page in the menu: green when its feature is on, hollow when off, amber when
+    /// it's on but needs a plugin that isn't installed (or is out of date). Pages without a switch get none.
+    /// </summary>
+    void RefreshNav()
+    {
+        var s = _app.Settings;
+        var pluginOk = PluginInstaller.IsCurrent(_app.Paths.InstallDir);
+        var states = new Dictionary<TabItem, (bool On, bool Plugin)>
+        {
+            [NoDamageTab] = (s.NoDamage, false),
+            [EarningsTab] = (s.IncomeMultiplier != 1 || s.XpMultiplier != 1, false),
+            [CoachTab] = (s.CoachLimits is not null || s.CoachIgnored != default || s.CoachFullSatisfaction, false),
+            [HudTab] = (s.MapPositionEnabled, false),
+            [BusDisplayTab] = (s.BusDisplay.Enabled, false),
+            [LiveryTab] = (s.LiveryPack.Enabled, false),
+            [OptionalTab] = (s.OptionalMods.Mods.Any(m => m.Source.Included), false),
+            [OverlayTab] = (s.SpeedOverlay, true),
+            [AlertsTab] = (s.CoachAlerts || s.TruckAlerts, true),
+            [TripTab] = (s.RecordCoachJobs, true),
+        };
+        foreach (var tab in Nav.Items.OfType<TabItem>().Where(t => t.Tag as string != "group"))
+        {
+            if (!_navNames.TryGetValue(tab, out var name)) _navNames[tab] = name = tab.Header as string ?? "";
+            var dot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
+            string? tip = null;
+            if (states.TryGetValue(tab, out var state))
+            {
+                var warn = state.On && state.Plugin && !pluginOk;
+                if (warn) dot.Fill = Ui.Brush(0xE0, 0x9A, 0x1A);
+                else if (state.On) dot.Fill = Ui.Brush(0x2E, 0xA0, 0x5B);
+                else { dot.Stroke = Ui.Brush(0xA0, 0xA8, 0xB4); dot.StrokeThickness = 1.2; }
+                tip = warn ? "On, but the plugin isn't installed or is out of date" : state.On ? "On" : "Off";
+            }
+            var header = new StackPanel { Orientation = Orientation.Horizontal };
+            header.Children.Add(dot);
+            header.Children.Add(new TextBlock { Text = name });
+            tab.Header = header;
+            tab.ToolTip = tip;
+        }
+        StepPickStatus.Text = states.Values.Count(x => x.On) switch
+        {
+            0 => "Nothing is switched on yet.",
+            1 => "1 feature is on (green dot).",
+            var n => $"{n} features are on (green dots).",
+        };
+    }
+
+    void RefreshSteps()
+    {
+        var s = _app.Settings;
+        StepApplyStatus.Text = _app.Paths.InstallDir is null ? "ETS2 wasn't found: check that it's installed through Steam."
+            : _app.GameRunning ? "ETS2 is running: close it to apply."
+            : GeneratedMods.All.Any(_app.ModExists) && s.ModsBuiltForGameStamp != _app.Paths.VersionStamp
+                ? "The mods were built for an older game version: press Rebuild all mods."
+                : "ETS2 is closed: ready to apply.";
+
+        var install = _app.Paths.InstallDir;
+        var plugin = PluginInstaller.FindSource() is null ? "Plugin file missing next to the app."
+            : !PluginInstaller.IsInstalled(install) ? "Plugin: not installed."
+            : !PluginInstaller.IsCurrent(install) ? "Plugin: out of date, install it again."
+            : "Plugin: installed.";
+        var mods = GeneratedMods.All.Where(_app.ModExists).Select(_app.Mine)
+            .Concat(_app.LiveryPackExists ? [_app.LiveryMod] : [])
+            .Concat(s.OptionalMods.Mods.Where(m => m.Source.Included && _app.OptionalExists(m)).Select(_app.OptionalSpec))
+            .ToList();
+        var notEnabled = mods.Count(m => ModStatus.ActiveIn(_app.Profiles, m).Count == 0);
+        StepGameStatus.Text = plugin + " " + (mods.Count == 0 ? "No mods made yet."
+            : notEnabled == 0 ? "Every mod is enabled in a profile."
+            : notEnabled == 1 ? "1 mod isn't enabled in Mod Manager yet."
+            : $"{notEnabled} mods aren't enabled in Mod Manager yet.");
+        StartInstallPluginButton.Visibility = PluginInstaller.IsCurrent(install) ? Visibility.Collapsed : Visibility.Visible;
+        StartInstallPluginButton.Content = PluginInstaller.IsInstalled(install) ? "Reinstall plugin" : "Install plugin";
+    }
 
     sealed record ModRow(string Name, string Kind, string File, string State, TabItem Page);
 
@@ -56,6 +136,8 @@ public partial class MainWindow
             new("Telemetry plugin", "Plugin", PluginInstaller.FileName, DescribePlugin() + " Used by: speed overlay, driving alerts, traffic light, trip and coach job summaries.", OverlayTab),
         ];
         ModsGrid.ItemsSource = rows;
+        RefreshNav();
+        RefreshSteps();
     }
 
     ModRow ModRowFor(ModSpec mod, string name, TabItem page)

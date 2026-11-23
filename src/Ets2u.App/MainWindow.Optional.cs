@@ -48,7 +48,7 @@ public partial class MainWindow
 
     void RefreshOptional()
     {
-        OptionalIntro.Text =
+        OptionalHeader.Info =
             "Convoy only lets players without a mod join when the mod is marked optional (mp_mod_optional in its manifest.sii). " +
             "This makes a copy of a mod that isn't, with only that changed, under its own file name in your mod folder " +
             $"(ets2u_opt_<id>_{_app.Settings.ModTag}.scs). The original is left as it is, so Steam never overwrites the copy. " +

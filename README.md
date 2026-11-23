@@ -2,11 +2,15 @@
 
 A Windows app for Euro Truck Simulator 2 (1.62) that switches a few things on and off for truck and coach profiles:
 
-The app has one page per mod or feature, grouped in a list on the left:
+The app has one page per mod or feature, grouped in a list on the left. A dot before each shows whether
+it's on (green), off (hollow), or on but waiting for the plugin to be installed or updated (amber). Each
+page opens with one line on what it's for and what it needs (a mod, the plugin, the game closed...); the
+details are behind the small ⓘ beside a heading or setting: hover it to read them. The app opens on the
+page it showed last.
 
 | Page | What it does | How |
 | --- | --- | --- |
-| **Overview** · Mods & plugins | Every mod and plugin the app makes, its file and state; rebuild all mods, (re)install or remove the plugin | |
+| **Overview** · Start here | The three steps (pick a feature, apply it, switch it on in the game) with where you stand on each: how many features are on, whether the game is closed, whether the plugin is installed and every mod enabled in Mod Manager; then every mod and plugin the app makes, its file and state; rebuild all mods, (re)install or remove the plugin | |
 | **Overview** · Game & profiles | Where the game, mods and profiles are | |
 | **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
 | **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
@@ -15,6 +19,7 @@ The app has one page per mod or feature, grouped in a list on the left:
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
+| **With the plugin** · Driving view | A page to leave open on another screen while you drive, in big figures: the traffic light and its points, speed and limit, the coach job (route, stop n of m, the next stop and the time left to it on the game's clock), the events per category and safety score of the job or captured trip, and the latest event; it scales with the window | Telemetry plugin |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the events of the last 60 in-game minutes of driving, or 30 or 120, at a Realistic, Normal or Relaxed strictness), both or neither | Telemetry plugin + on-screen overlay |
 | **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event (speeding only while its alerts are on) is listed with its time on the game's clock and the real one, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click, sorted by time, type, level or duration, and each can be removed; driving time in game time (with the real one beside it) and distance in game terms, top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
@@ -284,7 +289,7 @@ Don't use any of this on TruckersMP, which has its own rules and anti-cheat.
 > lines in `plugin\ets2u_telemetry.def`). The Core classes (`MouseDriveConfig`, `MouseDriveControls`) and
 > `MouseDriveIndicator` are kept but unused. The text below describes the feature as it was.
 
-Install the plugin (Mods & plugins page), tick **Let the mouse drive** on the Driving alerts page, then press F8
+Install the plugin (Start here page), tick **Let the mouse drive** on the Driving alerts page, then press F8
 (or Insert, or the middle mouse button) while driving to switch it on and off. It works the way
 OMSI 2 does; the maths follows [openOMSI](https://github.com/openOMSI-org/openOMSI)'s port of Omsi.exe:
 

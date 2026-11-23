@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Text;
 using Ets2u.Core.Extract;
 using Ets2u.Core.Features;
@@ -519,4 +519,22 @@ public class JobRouteTests
         Assert.Equal("Barcelona → Clermont (+1 stop not recorded)", JobText.Route(Stages(3, "Barcelona", "Toulouse", "Clermont")));
         Assert.Equal("Barcelona → Toulouse (+2 stops not recorded)", JobText.Route(Stages(3, "Barcelona", "Toulouse")));
     }
+
+    [Fact]
+    public void ACoachJobsProgressIsItsCurrentStage()
+    {
+        var job = Stages(3, "Barcelona", "Toulouse", "Clermont", "León");
+        job["bus.stages.current"] = "1";
+        job["destination_stop.arrival_time.planned[1]"] = "60838";
+        var progress = JobText.Progress(job);
+        Assert.Equal(new JobProgress(2, 3, "Clermont", 60838), progress);
+        Assert.Equal("Due in 1 h 12 min", progress.DueText(60838 - 72));
+        Assert.Equal("Late by 5 min", progress.DueText(60838 + 5));
+        Assert.Null(progress.DueText(null));
+    }
+
+    [Fact]
+    public void ATruckJobIsOneStageDueAtItsDeliveryTime() =>
+        Assert.Equal(new JobProgress(1, 1, "Brno", 5000),
+            JobText.Progress(new Dictionary<string, string> { ["destination_city"] = "Brno", ["delivery.time"] = "5000" }));
 }

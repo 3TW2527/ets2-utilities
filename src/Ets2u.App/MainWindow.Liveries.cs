@@ -59,7 +59,7 @@ public partial class MainWindow
     void RefreshLiveries()
     {
         var s = _app.Settings.LiveryPack;
-        LiveryIntro.Text =
+        LiveryHeader.Info =
             $"Mod: {_app.LiveryMod.FileName}. New coach liveries each come as their own mod; this packs the ones you choose into one " +
             "optional mod with your own file name, so Mod Manager shows one entry and your pack never clashes with another player's. " +
             "Local mods (.scs, .zip or a folder) and Steam Workshop items can both go in; Workshop items can be added by link, without subscribing.";
