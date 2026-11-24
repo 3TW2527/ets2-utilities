@@ -59,6 +59,12 @@ public sealed class AppSettings
     /// <summary>How many events the light takes to stay yellow or red, the same in every window.</summary>
     public Telemetry.LightStrictness TrafficLightStrictness { get; set; } = Telemetry.LightStrictness.Normal;
 
+    /// <summary>Looks for a newer release on GitHub when the app starts.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>The app version that last brought the installed plugin up to date (after an app update it's reinstalled once).</summary>
+    public string? PluginUpdatedByApp { get; set; }
+
     /// <summary>The page the app showed last (its name, e.g. "DrivingTab"), so it opens there again.</summary>
     public string? LastPage { get; set; }
 

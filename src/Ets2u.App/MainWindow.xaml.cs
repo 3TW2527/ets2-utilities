@@ -54,7 +54,17 @@ public partial class MainWindow : Window
             // MOUSE DRIVING DISABLED:
             // try { MouseDriveConfig.Write(_app.Settings); }
             // catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppDirs.Log("mouse_drive.ini: " + ex.Message); }
-            Run(() => _app.RebuildIfGameUpdated() ?? "Ready");
+            Run(() =>
+            {
+                var said = string.Join(" ", new[]
+                {
+                    App.JustUpdated ? $"Updated to {Ets2u.Core.Update.Updater.Text(Ets2u.Core.Update.Updater.Current)}." : null,
+                    _app.UpdatePluginIfAppUpdated(),
+                    _app.RebuildIfGameUpdated(),
+                }.Where(m => m is not null));
+                return said.Length > 0 ? said : "Ready";
+            });
+            InitUpdates();
             // Liveries are big: download Workshop updates, then check the pack's sources off the UI thread.
             StartLiveries();
             LoadWorkshopList();

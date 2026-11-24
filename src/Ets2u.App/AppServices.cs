@@ -1,4 +1,5 @@
 using System.IO;
+using PluginInstaller = Ets2u.Core.Telemetry.PluginInstaller;
 using Ets2u.Core;
 using Ets2u.Core.Extract;
 using Ets2u.Core.Features;
@@ -136,6 +137,28 @@ public sealed class AppServices
             message += $"Removed the old {string.Join(", ", old.Select(Path.GetFileName))}: the mods have new file names, " +
                        "so enable them again once in Mod Manager. ";
         return message + "Restart ETS2 to apply.";
+    }
+
+    /// <summary>
+    /// After an app update the installed plugin may be an older one, which the app can't read: replace it
+    /// once, when the game is closed. Not installed is left alone (the user hasn't asked for it).
+    /// </summary>
+    public string? UpdatePluginIfAppUpdated()
+    {
+        if (Settings.PluginUpdatedByApp == AppVersion) return null;
+        var install = Paths.InstallDir;
+        if (install is null || !PluginInstaller.IsInstalled(install) || PluginInstaller.FindSource() is null
+            || PluginInstaller.IsCurrent(install))
+        {
+            Settings.PluginUpdatedByApp = AppVersion;
+            Settings.Save();
+            return null;
+        }
+        if (GameRunning) return "The plugin needs updating for this version of the app: close ETS2 and reopen the app, or reinstall it on Start here.";
+        PluginInstaller.Install(install, Writer);
+        Settings.PluginUpdatedByApp = AppVersion;
+        Settings.Save();
+        return "Plugin updated for this version of the app.";
     }
 
     /// <summary>

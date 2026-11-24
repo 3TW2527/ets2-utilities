@@ -10,7 +10,7 @@ page it showed last.
 
 | Page | What it does | How |
 | --- | --- | --- |
-| **Overview** · Start here | The three steps (pick a feature, apply it, switch it on in the game) with where you stand on each: how many features are on, whether the game is closed, whether the plugin is installed and every mod enabled in Mod Manager; then every mod and plugin the app makes, its file and state; rebuild all mods, (re)install or remove the plugin | |
+| **Overview** · Start here | The three steps (pick a feature, apply it, switch it on in the game) with where you stand on each: how many features are on, whether the game is closed, whether the plugin is installed and every mod enabled in Mod Manager; then every mod and plugin the app makes, its file and state; rebuild all mods, (re)install or remove the plugin; the app's version, and updating it from GitHub | |
 | **Overview** · Game & profiles | Where the game, mods and profiles are | |
 | **Mods** · No damage | No damage or wear (trucks, coaches, trailers, cargo) | Generated mod `ets2u_nodamage_<tag>.scs` |
 | **Mods** · Bigger earnings | Bigger truck job pay and XP (x1 to x50) | Generated mod `ets2u_economy_<tag>.scs` |
@@ -244,6 +244,23 @@ file name of a local mod): every file as it is, picture and description included
 
 Every change is backed up first (Backups page). Don't use edited saves or the plugin on TruckersMP.
 
+### Updating
+
+From 0.14.0 the app updates itself. When it starts it looks at the latest release on GitHub (switch this
+off on Start here, or press Check for updates there), and a blue bar says when there's a newer one:
+
+- **Update now** downloads the release's zip and checks it against its SHA-256 (GitHub's digest of the
+  file, and the one in the release notes; a zip that doesn't match isn't installed). The app then closes,
+  its new copy puts the new files over the old ones and starts the app again. Settings, backups and
+  summaries stay where they are.
+- **What's new** opens the release page; **Later** hides the bar until the app next starts.
+- When the plugin is installed and the new version brings a new one, the app replaces it the next time
+  it starts with ETS2 closed (with a backup, as every change).
+- An app in a folder it can't write to (e.g. under Program Files) opens the release page instead: unzip
+  the new version over the old one by hand.
+
+The check asks GitHub only for the latest release's details, with no information about you or the game.
+
 ## Playing in Convoy (SCS multiplayer)
 
 By default Convoy makes every player run the same mods. Every mod this app generates is marked
@@ -367,6 +384,7 @@ dotnet test
 | Coach job summaries | `%APPDATA%\ets2u\coach_jobs.json` |
 | Workshop items downloaded by the app | `%LOCALAPPDATA%\ets2u\workshop\<id>\` |
 | DepotDownloader (when the app installed it) | `%LOCALAPPDATA%\ets2u\DepotDownloader\` |
+| An update being installed (deleted the next time the app starts) | `%LOCALAPPDATA%\ets2u\update\` |
 
 Never commit game files or SCS tools; `.gitignore` excludes them.
 

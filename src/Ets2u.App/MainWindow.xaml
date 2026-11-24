@@ -109,6 +109,16 @@
         <Border x:Name="Banner" DockPanel.Dock="Top" Background="#FFF4E5" Padding="12,8" Visibility="Collapsed">
             <TextBlock x:Name="BannerText" Foreground="#8A4B00" TextWrapping="Wrap"/>
         </Border>
+        <Border x:Name="UpdateBar" DockPanel.Dock="Top" Background="#E8F1FB" Padding="12,6" Visibility="Collapsed">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="UpdateNowButton" Content="Update now" Click="UpdateNow_Click" Margin="8,0,0,0" Padding="10,2"/>
+                    <Button x:Name="UpdateNotesButton" Content="What's new" Click="UpdateNotes_Click" Margin="8,0,0,0" Padding="10,2"/>
+                    <Button x:Name="UpdateLaterButton" Content="Later" Click="UpdateLater_Click" Margin="8,0,0,0" Padding="10,2"/>
+                </StackPanel>
+                <TextBlock x:Name="UpdateText" Foreground="#0B4A8B" TextWrapping="Wrap" VerticalAlignment="Center"/>
+            </DockPanel>
+        </Border>
         <StatusBar DockPanel.Dock="Bottom">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="Ready" TextWrapping="Wrap"/>
@@ -170,7 +180,7 @@
                             </Border>
                         </UniformGrid>
                         <local:Heading Text="What's in the game"
-                                       Info="Everything this app puts into the game, with its file and state. Double-click a row to open its page. After a game update the app rebuilds the mods by itself when it starts; Rebuild all mods does it now. Reinstall the plugin after updating the app."/>
+                                       Info="Everything this app puts into the game, with its file and state. Double-click a row to open its page. After a game update the app rebuilds the mods by itself when it starts; Rebuild all mods does it now. After the app is updated it updates the plugin too, the next time it starts with ETS2 closed."/>
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Bottom">
                         <WrapPanel Margin="0,10,0,0">
@@ -178,6 +188,14 @@
                             <Button x:Name="ReinstallPluginButton" Content="Reinstall plugin" Click="InstallPlugin_Click" Margin="0,0,8,6"/>
                             <Button x:Name="RemovePluginButton" Content="Remove plugin" Click="RemovePlugin_Click" Margin="0,0,8,6"/>
                             <Button Content="Open mod folder" Click="OpenModFolder_Click" Margin="0,0,8,6"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,4,0,0">
+                            <TextBlock x:Name="AppVersionText" VerticalAlignment="Center" Foreground="#5B6B7C" Margin="0,0,12,6"/>
+                            <CheckBox x:Name="CheckUpdatesBox" Content="Check for updates when the app starts" VerticalAlignment="Center"
+                                      Click="CheckUpdatesBox_Click" Margin="0,0,12,6"/>
+                            <Button x:Name="CheckUpdatesButton" Content="Check for updates" Click="CheckUpdates_Click" Margin="0,0,8,6"/>
+                            <local:InfoTip Margin="0,0,0,6" VerticalAlignment="Center"
+                                           Text="The app looks at its latest release on GitHub. Update now downloads it, checks it against the release's SHA-256, closes the app, puts the new files in place and starts it again. Your settings and backups stay. If the plugin is installed, it's updated too the next time the app starts with ETS2 closed."/>
                         </WrapPanel>
                     </StackPanel>
                     <DataGrid x:Name="ModsGrid" AutoGenerateColumns="False" IsReadOnly="True" HeadersVisibility="Column"
