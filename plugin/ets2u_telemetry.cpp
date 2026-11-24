@@ -48,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 7
+    uint32_t version;         // layout version, 8
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -67,12 +67,13 @@ struct Ets2uTelemetry
     char gameplay[4][2048];    // "id" on the first line, then the event's attributes as in job_info
     float local_scale;        // local.scale: game seconds per real second (ETS2 ~19 on roads, less in towns); 0 = not sent
     uint32_t game_time;       // game.time: the game's clock, in minutes since 00:00 of its first day (a Monday); 0 = not sent
+    int32_t time_offset;      // multiplayer.time.offset: a Convoy server's clock minus game_time, in minutes; 0 outside Convoy
 };
 #pragma pack(pop)
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 7;
+static const uint32_t kVersion = 8;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -146,6 +147,11 @@ static SCSAPI_VOID store_float(const scs_string_t, const scs_u32_t, const scs_va
 static SCSAPI_VOID store_u32(const scs_string_t, const scs_u32_t, const scs_value_t *const value, const scs_context_t context)
 {
     *static_cast<uint32_t *>(context) = value ? value->value_u32.value : 0u;
+}
+
+static SCSAPI_VOID store_s32(const scs_string_t, const scs_u32_t, const scs_value_t *const value, const scs_context_t context)
+{
+    *static_cast<int32_t *>(context) = value ? value->value_s32.value : 0;
 }
 
 static SCSAPI_VOID store_fvector(const scs_string_t, const scs_u32_t, const scs_value_t *const value, const scs_context_t context)
@@ -329,9 +335,14 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     // time and distance in the game's terms with this, as the game's own job figures are.
     p->register_for_channel(SCS_TELEMETRY_CHANNEL_local_scale, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->local_scale);
-    // The game's clock: the app dates events by it and rolls the traffic light's window along it.
+    // The game's clock: the app dates events by it. Sent every frame, not only when it changes, so it's
+    // right again on the first frame after a pause, a load or joining a convoy. In a convoy the game shows
+    // the server's clock, game.time plus multiplayer.time.offset (the local one stops on the desktop
+    // while the server's runs on), so the app adds the two.
     p->register_for_channel(SCS_TELEMETRY_CHANNEL_game_time, SCS_U32_NIL, SCS_VALUE_TYPE_u32,
-                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_u32, &g_shared->game_time);
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value | SCS_TELEMETRY_CHANNEL_FLAG_each_frame, store_u32, &g_shared->game_time);
+    p->register_for_channel(SCS_TELEMETRY_CHANNEL_multiplayer_time_offset, SCS_U32_NIL, SCS_VALUE_TYPE_s32,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value | SCS_TELEMETRY_CHANNEL_FLAG_each_frame, store_s32, &g_shared->time_offset);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_speed, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_ms);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, SCS_U32_NIL, SCS_VALUE_TYPE_float,

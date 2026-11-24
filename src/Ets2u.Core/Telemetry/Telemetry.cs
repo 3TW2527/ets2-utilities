@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 7;
+    public const uint ExpectedVersion = 8;
 
     public uint Magic;
     public uint Version;
@@ -44,12 +44,25 @@ public struct TelemetryFrame
     public float LocalScale;
     /// <summary>The game's clock (game.time): minutes since 00:00 of its first day, a Monday; 0 when not sent.</summary>
     public uint GameTime;
+    /// <summary>
+    /// In a Convoy session, the server's clock minus <see cref="GameTime"/> (multiplayer.time.offset), in
+    /// minutes; 0 outside one. The game shows the server's clock there.
+    /// </summary>
+    public int TimeOffset;
 
     /// <summary>The time scale to use: 1 when the game didn't send one.</summary>
     public readonly double Scale => LocalScale > 0 && float.IsFinite(LocalScale) ? LocalScale : 1;
 
-    /// <summary>The game's clock in minutes, or null when the game didn't send it.</summary>
-    public readonly uint? GameMinute => GameTime > 0 ? GameTime : null;
+    /// <summary>
+    /// The clock the game shows, in minutes: in a Convoy session the server's (<see cref="GameTime"/> plus
+    /// <see cref="TimeOffset"/>), else the game's own. Null when the game didn't send it.
+    /// </summary>
+    public readonly uint? GameMinute => GameTime > 0 ? (uint)Math.Max(1L, (long)GameTime + TimeOffset) : null;
+
+    /// <summary>
+    /// The local economy's clock (game.time alone), which the job's due times are on; null when not sent.
+    /// </summary>
+    public readonly uint? LocalGameMinute => GameTime > 0 ? GameTime : null;
 
     public readonly string TruckId
     {

@@ -66,6 +66,15 @@ static void send_float(const char *channel, float v)
         if (strcmp(c.name, channel) == 0) c.cb(c.name, SCS_U32_NIL, &value, c.ctx);
 }
 
+static void send_s32(const char *channel, int32_t v)
+{
+    scs_value_t value{};
+    value.type = SCS_VALUE_TYPE_s32;
+    value.value_s32.value = v;
+    for (auto &c : g_channels)
+        if (strcmp(c.name, channel) == 0) c.cb(c.name, SCS_U32_NIL, &value, c.ctx);
+}
+
 static void send_u32(const char *channel, uint32_t v)
 {
     scs_value_t value{};
@@ -133,6 +142,7 @@ int main(int argc, char **argv)
     send_float(SCS_TELEMETRY_TRUCK_CHANNEL_speed, 25.0f);
     send_float(SCS_TELEMETRY_CHANNEL_local_scale, 19.0f);
     send_u32(SCS_TELEMETRY_CHANNEL_game_time, 2 * 1440 + 14 * 60 + 32); // Wed 14:32
+    send_s32(SCS_TELEMETRY_CHANNEL_multiplayer_time_offset, -95); // a convoy server 1 h 35 behind
     send_float(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, 80.0f / 3.6f);
     // Braking at 0.4 g (vehicle space: +z is backwards) while accelerating 0.2 g towards the right.
     send_vector(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, 0.2f * 9.80665f, 0.0f, 0.4f * 9.80665f);
@@ -144,7 +154,7 @@ int main(int argc, char **argv)
     const float *f = reinterpret_cast<const float *>(raw);
     printf("magic=%08X version=%u sequence=%u paused=%u speed=%.2f limit=%.2f fwd=%.3fg right=%.3fg mouse=%u truck=%s\n",
            raw[0], raw[1], raw[2], raw[3], f[4], f[5], f[6], f[7], raw[8], reinterpret_cast<const char *>(raw + 12));
-    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 7 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
+    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 8 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
               && f[5] > 22.2f && f[5] < 22.3f
               // smoothed towards -0.4 g forward and 0.2 g right: two frames of at most 0.2 s each count: about three quarters of the way
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0
@@ -215,6 +225,9 @@ int main(int argc, char **argv)
     const uint32_t *game_time = reinterpret_cast<const uint32_t *>(reinterpret_cast<const char *>(raw) + 16512);
     printf("game time=%u\n", *game_time);
     ok = ok && *game_time == 2 * 1440 + 14 * 60 + 32;
+    const int32_t *time_offset = reinterpret_cast<const int32_t *>(reinterpret_cast<const char *>(raw) + 16516);
+    printf("time offset=%d\n", *time_offset);
+    ok = ok && *time_offset == -95;
 
     // The job ends: an empty configuration.
     scs_named_value_t none[1] = {};

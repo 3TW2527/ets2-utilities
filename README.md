@@ -68,6 +68,13 @@ planned distance, passengers). Pick a job under **Show**; **Copy summary** and *
   Before 0.13.0 the plugin passed a job in 1 KB, which a job of three or more stages overran, so its last
   stages were lost and the route ended at the last one that arrived; those jobs now say so, e.g.
   "Barcelona → Clermont (+1 stop not recorded)". The plugin now has 8 KB for it: reinstall it after updating.
+- The game's clock is the one the game shows. In a Convoy session that's the server's clock, which the
+  game sends apart from its own (`multiplayer.time.offset` on top of `game.time`); before 0.13.1 the plugin
+  read only its own, so in a convoy events were dated by a clock that could be hours off, and stopped while
+  you were on the desktop. The plugin now sends both every frame, so the time is right again on the first
+  frame after a pause, a load or joining a convoy (while paused the game sends nothing, so it shows the
+  last time it sent). A job's due time stays on the game's own clock, which is the one its times are on.
+  Plugin layout v8: reinstall it after updating.
 - When a coach job starts, the app says so and the Trip summary page switches to it, unless you're
   capturing a trip by hand.
 - A job starts when its configuration appears and ends when it clears (or the next job starts after a

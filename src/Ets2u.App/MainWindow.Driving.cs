@@ -140,7 +140,7 @@ public partial class MainWindow
             DriveRoute.Text = job.Route.Length > 0 ? job.Route : "Job";
             DriveStage.Text = progress.Stages > 1 ? $"Stop {progress.Stage} of {progress.Stages}" : "Delivering to";
             DriveNext.Text = progress.NextStop is { } stop ? "→ " + stop : "";
-            var due = progress.DueText(clock);
+            var due = progress.DueText(hub.LocalGameMinute);
             DriveDue.Text = due ?? "";
             DriveDue.Foreground = due?.StartsWith("Late", StringComparison.Ordinal) == true ? DriveRed : DriveGreen;
         }

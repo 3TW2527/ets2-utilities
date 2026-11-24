@@ -278,8 +278,8 @@ public class JobTrackerTests
 
     [Fact]
     public void TheFrameMatchesThePluginsLayout() =>
-        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[8192], gameplay_count, gameplay[4][2048], local_scale, game_time
-        Assert.Equal(48 + 64 + 8 + 8192 + 4 + 8192 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
+        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[8192], gameplay_count, gameplay[4][2048], local_scale, game_time, time_offset
+        Assert.Equal(48 + 64 + 8 + 8192 + 4 + 8192 + 4 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
 }
 
 public class GMeterTests

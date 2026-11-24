@@ -51,7 +51,7 @@ public sealed class TelemetryHub : IDisposable
     IReadOnlyList<AlertCard> _alerts = [];
     AlertLevel? _recent;
     LightReading _light;
-    uint? _gameMinute;
+    uint? _gameMinute, _localMinute;
     int _savedRevision;
     DateTime _savedAt;
 
@@ -108,6 +108,12 @@ public sealed class TelemetryHub : IDisposable
     public uint? GameMinute
     {
         get { lock (_lock) return _gameMinute; }
+    }
+
+    /// <summary>The local economy's clock, which job due times are on (differs from <see cref="GameMinute"/> in a convoy).</summary>
+    public uint? LocalGameMinute
+    {
+        get { lock (_lock) return _localMinute; }
     }
 
     public DrivingThresholds ThresholdsFor(bool coach) =>
@@ -186,6 +192,7 @@ public sealed class TelemetryHub : IDisposable
             _recent = _status.Level;
             _light = new LightReading(_status.Points, _status.YellowFrom, _status.RedFrom, _status.WindowMinutes, _status.Level);
             _gameMinute = (frame ?? raw)?.GameMinute;
+            _localMinute = (frame ?? raw)?.LocalGameMinute;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));

@@ -84,6 +84,17 @@ public class SpeedTextTests
     public void FormatsLimit() => Assert.Equal("Limit 80 km/h · 50 mph", SpeedText.FormatLimit(80 / 3.6f));
 
     [Fact]
+    public void InAConvoyTheClockIsTheServers()
+    {
+        var alone = new TelemetryFrame { GameTime = 2 * 1440 + 14 * 60 + 52 };
+        Assert.Equal(alone.GameTime, alone.GameMinute);
+        var convoy = alone with { TimeOffset = -49 };
+        Assert.Equal("Wed 14:03", GameClock.Format(convoy.GameMinute!.Value));
+        Assert.Equal(alone.GameTime, convoy.LocalGameMinute);
+        Assert.Null(new TelemetryFrame { TimeOffset = 30 }.GameMinute);
+    }
+
+    [Fact]
     public void FrameLayoutMatchesPlugin()
     {
         // Where the plugin's fields start (see plugin/ets2u_telemetry.cpp and plugin/test_host.cpp).
@@ -92,6 +103,7 @@ public class SpeedTextTests
         Assert.Equal(8312, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameplayCount)));
         Assert.Equal(16508, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.LocalScale)));
         Assert.Equal(16512, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.GameTime)));
-        Assert.Equal(16516, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
+        Assert.Equal(16516, (int)System.Runtime.InteropServices.Marshal.OffsetOf<TelemetryFrame>(nameof(TelemetryFrame.TimeOffset)));
+        Assert.Equal(16520, System.Runtime.InteropServices.Marshal.SizeOf<TelemetryFrame>());
     }
 }
