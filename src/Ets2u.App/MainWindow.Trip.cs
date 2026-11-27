@@ -110,17 +110,26 @@ public partial class MainWindow
     DispatcherTimer? _tripTimer;
 
     /// <summary>What the page shows: the trip of Start/Stop, the coach job being driven, or a saved one.</summary>
-    sealed record TripSource(string Label, int Job)
+    sealed record TripSource(string Label, int Job, bool Truck = false)
     {
         public const int Manual = -2, CurrentJob = -1;
         public override string ToString() => Label;
     }
 
-    List<JobSummary>? _jobs;
+    List<JobSummary>? _coachJobs, _truckJobs;
+    /// <summary>Which log the job that ended last went in, so the page can show it.</summary>
+    bool _lastFinishedTruck;
     string _sourcesKey = "";
     bool _settingSources;
 
-    List<JobSummary> Jobs => _jobs ??= JobLog.Load();
+    /// <summary>The coach jobs' or the truck jobs' summaries, newest first.</summary>
+    List<JobSummary> Log(bool truck) =>
+        truck ? _truckJobs ??= JobLog.Load(JobLog.TruckFilePath) : _coachJobs ??= JobLog.Load(JobLog.FilePath);
+
+    void SaveLog(bool truck) => JobLog.Save(Log(truck), JobLog.PathFor(truck));
+
+    /// <summary>The log the picked saved job is in.</summary>
+    List<JobSummary> SelectedLog => Log(Selected.Truck);
 
     TripSource Selected => TripSourceBox.SelectedItem as TripSource ?? new TripSource("", TripSource.Manual);
 
@@ -128,22 +137,24 @@ public partial class MainWindow
     void RefreshTripSources()
     {
         var current = _hub?.Jobs.Current();
-        var key = $"{Jobs.Count}:{Jobs.FirstOrDefault()?.Started.Ticks}:{current?.Started.Ticks}";
+        var key = $"{Log(false).Count}:{Log(false).FirstOrDefault()?.Started.Ticks}:{Log(true).Count}:{Log(true).FirstOrDefault()?.Started.Ticks}:" +
+                  $"{current?.Started.Ticks}:{current?.IsCoach}";
         if (key == _sourcesKey) return;
         _sourcesKey = key;
         var picked = Selected;
         var c = CultureInfo.InvariantCulture;
         var items = new List<TripSource> { new("Trip (Start / Stop capturing)", TripSource.Manual) };
         if (current is not null)
-            items.Add(new($"Coach job in progress, since {current.Started.ToLocalTime():HH:mm}" +
+            items.Add(new($"{current.Noun} in progress, since {current.Started.ToLocalTime():HH:mm}" +
                           (current.Route.Length > 0 ? " · " + current.Route : ""), TripSource.CurrentJob));
-        items.AddRange(Jobs.Select((j, i) => new TripSource(string.Create(c,
-            $"{j.Started.ToLocalTime():d MMM HH:mm} · {(j.Route.Length > 0 ? j.Route + " · " : "")}{JobText.Describe(j.Outcome, null)}{(j.Trip.Score is { } s ? " · score " + Math.Round(s).ToString(c) : "")}"), i)));
+        foreach (var truck in new[] { false, true })
+            items.AddRange(Log(truck).Select((j, i) => new TripSource(string.Create(c,
+            $"{(truck ? "Truck" : "Coach")} · {j.Started.ToLocalTime():d MMM HH:mm} · {(j.Route.Length > 0 ? j.Route + " · " : "")}{JobText.Describe(j.Outcome, null)} · score {Math.Round(j.Trip.Score).ToString(c)}"), i, truck)));
         _settingSources = true;
         TripSourceBox.ItemsSource = items;
         // A job that was in progress and just ended is now the newest saved one.
         TripSourceBox.SelectedItem = picked.Job == TripSource.CurrentJob && current is null && items.Count > 1
-            ? items.FirstOrDefault(i => i.Job == 0)
+            ? items.FirstOrDefault(i => i.Job == 0 && i.Truck == _lastFinishedTruck)
             : items.FirstOrDefault(i => i.Label == picked.Label) ?? items[0];
         _settingSources = false;
         _tripRows.Clear();
@@ -167,8 +178,8 @@ public partial class MainWindow
         if (showing is not null) TripSourceBox.SelectedItem = showing;
         var route = current.Route.Length > 0 ? $" ({current.Route})" : "";
         _app.Status(_hub?.Jobs.Waiting == true
-            ? $"Coach job in progress from before{route}: its summary carries on once the game loads the job again."
-            : $"Coach job started{route}: its summary is being kept (Trip summary page).");
+            ? $"{current.Noun} in progress from before{route}: its summary carries on once the game loads the job again."
+            : $"{current.Noun} started{route}: its summary is being kept (Trip summary page).");
     }
 
     void TripSource_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -180,26 +191,36 @@ public partial class MainWindow
 
     void RecordJobs_Click(object sender, RoutedEventArgs e)
     {
-        _app.Settings.RecordCoachJobs = RecordJobsBox.IsChecked == true;
-        _app.Settings.Save();
-        if (_app.Settings.RecordCoachJobs) _ = Hub;
-        _app.Status(_app.Settings.RecordCoachJobs ? "Coach jobs will get a summary each." : "Coach jobs aren't summarised any more.");
+        var s = _app.Settings;
+        s.RecordCoachJobs = RecordJobsBox.IsChecked == true;
+        s.RecordTruckJobs = RecordTruckJobsBox.IsChecked == true;
+        s.Save();
+        if (s.RecordJobs) _ = Hub;
+        _app.Status((s.RecordCoachJobs, s.RecordTruckJobs) switch
+        {
+            (true, true) => "Coach and truck jobs will get a summary each, in logs of their own.",
+            (true, false) => "Coach jobs will get a summary each; truck jobs won't.",
+            (false, true) => "Truck jobs will get a summary each; coach jobs won't.",
+            _ => "Jobs aren't summarised any more.",
+        });
     }
 
-    /// <summary>Saves a finished coach job (called on the reader thread).</summary>
+    /// <summary>Saves a finished job in its log, coach or truck (called on the reader thread).</summary>
     void OnJobFinished(JobSummary job) => Dispatcher.BeginInvoke(() =>
     {
-        Jobs.Insert(0, job);
+        var truck = !job.IsCoach;
+        Log(truck).Insert(0, job);
+        _lastFinishedTruck = truck;
         try
         {
-            JobLog.Save(Jobs);
+            SaveLog(truck);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            _app.Status("Couldn't save the coach job's summary: " + ex.Message);
+            _app.Status($"Couldn't save the {job.Noun.ToLowerInvariant()}'s summary: " + ex.Message);
             return;
         }
-        _app.Status($"Coach job {JobText.Describe(job.Outcome, job.Result).ToLowerInvariant()}" +
+        _app.Status($"{job.Noun} {JobText.Describe(job.Outcome, job.Result).ToLowerInvariant()}" +
                     (job.Route.Length > 0 ? $" ({job.Route})" : "") + ". Its summary is on the Trip summary page.");
         RefreshTripSources();
         if (TripTab.IsSelected) ShowTrip();
@@ -207,9 +228,9 @@ public partial class MainWindow
 
     void ForgetJob_Click(object sender, RoutedEventArgs e)
     {
-        if (Selected.Job < 0 || Selected.Job >= Jobs.Count) return;
-        Jobs.RemoveAt(Selected.Job);
-        JobLog.Save(Jobs);
+        if (Selected.Job < 0 || Selected.Job >= SelectedLog.Count) return;
+        SelectedLog.RemoveAt(Selected.Job);
+        SaveLog(Selected.Truck);
         _sourcesKey = "";
         RefreshTripSources();
         ShowTrip();
@@ -241,10 +262,11 @@ public partial class MainWindow
         {
             TripSource.Manual => _hub?.Trip.Remove(row.Started, row.Kind) == true,
             TripSource.CurrentJob => _hub?.Jobs.RemoveEvent(row.Started, row.Kind) == true,
-            var i when i >= 0 && i < Jobs.Count => RemoveSaved(i, row),
+            var i when i >= 0 && i < SelectedLog.Count => RemoveSaved(i, row),
             _ => false,
         };
         if (!removed) return;
+        _hub?.View.Remove(row.Started, row.Kind); // the Driving view counts it too
         _app.Status($"Removed the {row.Category.ToLowerInvariant()} event at {row.Started.ToLocalTime():HH:mm:ss}; the score no longer counts it.");
         _sourcesKey = ""; // the Show list has each job's score
         ShowTrip();
@@ -252,18 +274,19 @@ public partial class MainWindow
 
     bool RemoveSaved(int index, TripEventRow row)
     {
-        var job = Jobs[index];
+        var log = SelectedLog;
+        var job = log[index];
         if (!job.Trip.Events.Any(ev => ev.Started == row.Started && ev.Kind == row.Kind)) return false;
-        Jobs[index] = job with { Trip = job.Trip.Without(row.Started, row.Kind) };
+        log[index] = job with { Trip = job.Trip.Without(row.Started, row.Kind) };
         try
         {
-            JobLog.Save(Jobs);
+            SaveLog(Selected.Truck);
             return true;
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            Jobs[index] = job;
-            _app.Status("Couldn't save the coach job's summary: " + ex.Message);
+            log[index] = job;
+            _app.Status($"Couldn't save the {job.Noun.ToLowerInvariant()}'s summary: " + ex.Message);
             return false;
         }
     }
@@ -285,6 +308,7 @@ public partial class MainWindow
         }
         TripPluginStatus.Text = DescribePlugin();
         RecordJobsBox.IsChecked = _app.Settings.RecordCoachJobs;
+        RecordTruckJobsBox.IsChecked = _app.Settings.RecordTruckJobs;
         _settingSort = true;
         TripSortBox.ItemsSource = SortNames;
         TripSortBox.DisplayMemberPath = "Value";
@@ -322,7 +346,7 @@ public partial class MainWindow
     JobSummary? ShownJob => Selected.Job switch
     {
         TripSource.CurrentJob => _hub?.Jobs.Current(),
-        >= 0 when Selected.Job < Jobs.Count => Jobs[Selected.Job],
+        >= 0 when Selected.Job < SelectedLog.Count => SelectedLog[Selected.Job],
         _ => null,
     };
 
@@ -357,7 +381,7 @@ public partial class MainWindow
 
         if (trip is null)
         {
-            TripStatus.Text = manual ? "No trip captured yet." : "No coach job in progress.";
+            TripStatus.Text = manual ? "No trip captured yet." : "No job in progress.";
             TripNoEventsText.Text = manual ? "Press Start capturing, then drive." : "";
             TripNoEvents.Visibility = Visibility.Visible;
             _tripRows.Clear();
@@ -368,9 +392,9 @@ public partial class MainWindow
         var started = trip.Started.ToLocalTime();
         TripStatus.Text = job is not null
             ? (job.Outcome == JobOutcome.InProgress
-                ? $"Coach job since {started:d MMM HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}." +
+                ? $"{job.Noun} since {started:d MMM HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}." +
                   (_hub?.Jobs.Waiting == true ? " Waiting for the game to load it again: it carries on then." : "")
-                : $"Coach job from {started:d MMM HH:mm} to {job.Ended!.Value.ToLocalTime():HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}: " +
+                : $"{job.Noun} from {started:d MMM HH:mm} to {job.Ended!.Value.ToLocalTime():HH:mm}{(job.Route.Length > 0 ? ", " + job.Route : "")}: " +
                   JobText.Describe(job.Outcome, job.Result) + ".")
             : trip.Capturing
             ? (_hub!.Current.Frame is null
@@ -386,22 +410,14 @@ public partial class MainWindow
         };
         TripTotalsText.Text = string.Create(c, $"{trip.DrivingText} · {trip.DistanceText} · top speed {trip.TopKmh:0} km/h{vehicle}");
 
-        if (trip.Score is { } score)
-        {
-            var band = TripSummary.Band(score);
-            TripScoreText.Text = Math.Round(score).ToString("0", c);
-            TripScoreBadge.Background = band is { } b ? TripLook.Fill(b) : TripLook.Green;
-            TripScoreLabel.Text = "Safety score";
-            TripScoreBadge.ToolTip = "Events per 10 hours of driving in game time (as the game's clock and job screens count it), " +
-                                     "a red event counting as two. Green under 20, yellow under 40, red from 40.";
-        }
-        else
-        {
-            TripScoreText.Text = "–";
-            TripScoreBadge.Background = TripLook.Grey;
-            TripScoreLabel.Text = "Score after 10 min";
-            TripScoreBadge.ToolTip = null;
-        }
+        var score = trip.Score;
+        var band = TripSummary.Band(score);
+        TripScoreText.Text = Math.Round(score).ToString("0", c);
+        TripScoreBadge.Background = band is { } b ? TripLook.Fill(b) : TripLook.Green;
+        TripScoreLabel.Text = "Safety score";
+        TripScoreBadge.ToolTip = "Events per 10 hours of driving in game time (as the game's clock and job screens count it), " +
+                                 "a red event counting as two. A trip under an hour counts as an hour, the rest as clean driving. " +
+                                 "Green under 20, yellow under 40, red from 40.";
 
         TripCounts.ItemsSource = TripKinds.Select(kind =>
         {

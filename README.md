@@ -19,10 +19,10 @@ page it showed last.
 | **Mods** · Destination display | Your own text (and route number, colour, size) on the coaches' front destination display, job or no job; a searchable list of saved texts of any size | Generated mod `ets2u_busdisplay_<tag>.scs` |
 | **Mods** · Livery pack | Packs many livery mods (local files or folders, and Steam Workshop items, added by link without subscribing) into one optional mod; rebuilt on start when a source mod changes | Generated mod `ets2u_liveries_<tag>.scs` |
 | **Mods** · Make optional | An optional copy of any mod that isn't optional for Convoy (e.g. an engine or tire mod from the Workshop): its files as they are, with `mp_mod_optional: true` added to the manifest; rebuilt on start when the original changes | Copy `ets2u_opt_<id>_<tag>.scs` |
-| **With the plugin** · Driving view | A page to leave open on another screen while you drive, in big figures: the traffic light and its points, speed and limit, the coach job (route, stop n of m, the next stop and the time left to it on the game's clock), the events per category and safety score of the job or captured trip, and the latest event; it scales with the window | Telemetry plugin |
+| **With the plugin** · Driving view | A page to leave open on another screen while you drive, in big figures: the traffic light and its points, speed and limit, the job (route, stop n of m, and its schedule on the game's clock: start, next stop and when it's due there, end, and the ETA when the next stop is the last one), a table of the job's or trip's events (a column per kind, a row each for yellow and red), and a table of its safety score, driving time, distance, top speed and latest event; **F5** clears the view's counts and the traffic light without touching the job's own summary; it scales with the window | Telemetry plugin |
 | **With the plugin** · Speed overlay | Speed in km/h and mph together | Telemetry plugin `ets2u_telemetry.dll` + on-screen overlay |
 | **With the plugin** · Driving alerts | GreenRoad-style alerts: yellow or red cards for harsh acceleration, braking and cornering, red for speeding (limit + 10% + 2 km/h); separate switches and thresholds for coaches and trucks; defaults 0.35 / 0.7 g (yellow / red) for coaches and 0.4 / 0.8 g for trucks, in every direction; each vehicle can instead use the coach mod's g-force limits (yellow = normal, red = harsh) or its own numbers, and the defaults or coach mod can be relaxed 10% or 20%, separately for coaches and trucks; a floating live g-force meter shows now and peak in each direction; shown as the cards, a traffic light (green, yellow and red lamps in a row, green on the left, flashing on an event and steady for the events of the last 60 in-game minutes of driving, or 30 or 120, at a Realistic, Normal or Relaxed strictness), both or neither | Telemetry plugin + on-screen overlay |
-| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event (speeding only while its alerts are on) is listed with its time on the game's clock and the real one, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click, sorted by time, type, level or duration, and each can be removed; driving time in game time (with the real one beside it) and distance in game terms, top speed, counts per category and a safety score (events per 10 hours of game time, red counting double; green under 20, yellow under 40); copy as text; also a summary of every coach job, kept automatically from when you take the job to when it's delivered or cancelled (last 200) | Telemetry plugin, uses the Driving alerts thresholds |
+| **With the plugin** · Trip summary | GreenRoad-style trip summary: press Start capturing and Stop capturing in the app; every harsh acceleration, braking, cornering and speeding event (speeding only while its alerts are on) is listed with its time on the game's clock and the real one, a yellow or red icon and how it happened (e.g. "Braking to a stop", "Accelerating while exiting a turn"), with details on click, sorted by time, type, level or duration, and each can be removed; driving time in game time (with the real one beside it) and distance in game terms, top speed, counts per category and a safety score (events per 10 hours of game time, red counting double, a trip under an hour counting as an hour; green under 20, yellow under 40); copy as text; also a summary of every coach job and every truck job, kept automatically from when you take the job to when it's delivered or cancelled, whether the alerts are on or off (last 200 of each, in separate logs) | Telemetry plugin, uses the Driving alerts thresholds |
 | **Tools** · Money & XP | Set or add money, truck XP and coach XP | Edits the save in place: binary (the game's default) or text |
 | **Tools** · Game information | Fuel price per country, in any currency the game's options offer (at the game's own rates), and every city of the installed game with its name ready to copy for the console's `goto` | Read from `def.scs` (currencies from `def/economy_data.sii`), the installed `dlc_*.scs` and `locale.scs` |
 | **Tools** · Backups | Undo any change the app made (except the livery pack and optional copies, which are rebuilt from their sources) | Copies taken before every write |
@@ -52,9 +52,10 @@ from the truck changes, which stays near zero through a steady corner, so the pl
 (angular velocity x velocity, i.e. speed x yaw rate), as an accelerometer in the cab would feel it. It's part of the Coach comfort mod, because both change the same
 file; turn off other mods that change `bus_economy_data.sii`, or only one of them wins.
 
-## Coach job summaries
+## Job summaries
 
-With **Also keep a summary of every coach job** on (Trip summary page, on by default), the app keeps a trip
+With **Keep a summary of every coach job** and **and every truck job** on (Trip summary page, both on by
+default), the app keeps a trip
 summary for each job without any buttons: the same events, totals and score as a captured trip, plus how
 the job ended (delivered, with revenue and XP, or cancelled, with the penalty) and a line about the job (pay,
 planned distance, passengers). Pick a job under **Show**; **Copy summary** and **Forget this job** work on it.
@@ -91,7 +92,8 @@ planned distance, passengers). Pick a job under **Show**; **Copy summary** and *
   the driving time stretched to match, so the score is taken over the whole job (a little kinder than it
   should be, as the missing stretch had no events counted). With the app open the whole time, closing
   and restarting the game loses nothing: no driving happens while it's closed.
-- Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` (newest 200).
+- Summaries are kept in `%APPDATA%\ets2u\coach_jobs.json` and `truck_jobs.json` (newest 200 of each). A job
+  counts as a coach job when it's a bus job, or was driven in a coach only.
 
 ## Safety events list
 
@@ -119,7 +121,8 @@ scale (the SDK's `local.scale`, about 19 on roads and less in towns). A route pa
 and stops of a real 1½-hour run into a few real minutes, so counting real minutes would make every drive
 look 15 to 20 times worse than the same driving on a real road. In game time the summary's driving time
 and distance match the game's own job figures. The events themselves are measured live, in real g and real
-km/h, as a box in a real cab would. The score shows from 10 game minutes of driving.
+km/h, as a box in a real cab would. A trip shorter than one game hour counts as an hour, the rest of it as
+clean driving, so a few events in the first minutes don't scale up to a score in the hundreds.
 
 Jobs saved by 0.12.0 counted real time; the app converts them using the job's own distance from the game.
 
@@ -381,7 +384,7 @@ dotnet test
 | Speed plugin | `<game>\bin\win_x64\plugins\ets2u_telemetry.dll` |
 | Mouse driving settings (read by the plugin) | `%APPDATA%\ets2u\mouse_drive.ini` |
 | Saved destination display texts | `%APPDATA%\ets2u\destination_texts.txt` |
-| Coach job summaries | `%APPDATA%\ets2u\coach_jobs.json` |
+| Coach and truck job summaries | `%APPDATA%\ets2u\coach_jobs.json`, `truck_jobs.json` |
 | Workshop items downloaded by the app | `%LOCALAPPDATA%\ets2u\workshop\<id>\` |
 | DepotDownloader (when the app installed it) | `%LOCALAPPDATA%\ets2u\DepotDownloader\` |
 | An update being installed (deleted the next time the app starts) | `%LOCALAPPDATA%\ets2u\update\` |

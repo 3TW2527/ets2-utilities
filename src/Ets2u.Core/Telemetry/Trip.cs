@@ -53,10 +53,14 @@ public sealed record TripSummary(
     /// GreenRoad's way of scoring: events per 10 hours of driving, a red one counting as two yellows. The
     /// hours are the game's: a route packs a real drive's corners and junctions into a few real minutes,
     /// so real minutes would make every trip look many times worse than the same drive on a real road.
-    /// Null until 10 game minutes have been driven (one event in a few seconds says nothing).
+    /// A trip shorter than <see cref="ScoreFloor"/> counts as that long, the rest as clean driving: one
+    /// event in a few minutes would otherwise scale up to hundreds. Longer trips score on their own hours.
     /// </summary>
-    public double? Score => DrivingTime < TimeSpan.FromMinutes(10) ? null
-        : (Count(AlertLevel.Yellow) + 2.0 * Count(AlertLevel.Red)) / DrivingTime.TotalHours * 10;
+    public double Score =>
+        (Count(AlertLevel.Yellow) + 2.0 * Count(AlertLevel.Red)) / Math.Max(DrivingTime.TotalHours, ScoreFloor.TotalHours) * 10;
+
+    /// <summary>The least driving (game time) a score is worked out over.</summary>
+    public static readonly TimeSpan ScoreFloor = TimeSpan.FromHours(1);
 
     /// <summary>The summary without one event (a saved job's, taken off by hand).</summary>
     public TripSummary Without(DateTime started, DrivingEventKind kind) =>
@@ -80,7 +84,7 @@ public sealed record TripSummary(
         {
             string.Create(c, $"Trip summary, {Started.ToLocalTime():yyyy-MM-dd HH:mm} to {(Stopped ?? DateTime.UtcNow).ToLocalTime():HH:mm}"),
             string.Create(c, $"{DrivingText} · {DistanceText} · top speed {TopKmh:0} km/h"),
-            Score is { } s ? string.Create(c, $"Safety score {s:0} ({Band(s)?.ToString() ?? "Green"})") : "Safety score: not enough driving yet",
+            string.Create(c, $"Safety score {Score:0} ({Band(Score)?.ToString() ?? "Green"})"),
             "",
             "Safety events",
         };
@@ -143,6 +147,12 @@ public sealed class TripRecorder
     public bool Capturing
     {
         get { lock (_lock) return _any && _stopped is null; }
+    }
+
+    /// <summary>When the trip started and stopped, or null before the first Start: cheap, for telling one trip from the next.</summary>
+    public (DateTime Started, DateTime? Stopped)? Bounds
+    {
+        get { lock (_lock) return _any ? (_started, _stopped) : null; }
     }
 
     /// <summary>Starts a new trip, dropping the last one.</summary>

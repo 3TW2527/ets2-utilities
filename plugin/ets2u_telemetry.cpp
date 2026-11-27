@@ -48,7 +48,7 @@
 struct Ets2uTelemetry
 {
     uint32_t magic;           // 'E2UT'
-    uint32_t version;         // layout version, 8
+    uint32_t version;         // layout version, 9
     uint32_t sequence;        // bumped every frame the game simulates
     uint32_t paused;          // 1 while the game is paused or in menus
     float speed_ms;           // truck.speed, m/s (negative when reversing)
@@ -68,12 +68,14 @@ struct Ets2uTelemetry
     float local_scale;        // local.scale: game seconds per real second (ETS2 ~19 on roads, less in towns); 0 = not sent
     uint32_t game_time;       // game.time: the game's clock, in minutes since 00:00 of its first day (a Monday); 0 = not sent
     int32_t time_offset;      // multiplayer.time.offset: a Convoy server's clock minus game_time, in minutes; 0 outside Convoy
+    float nav_distance_m;     // truck.navigation.distance: what the route advisor has left to its destination, m; 0 = no route
+    float nav_time_s;         // truck.navigation.time: the route advisor's ETA there, in seconds; 0 = no route
 };
 #pragma pack(pop)
 
 static const wchar_t *const kMapName = L"Local\\Ets2uTelemetry";
 static const uint32_t kMagic = 0x54553245; // "E2UT" little-endian
-static const uint32_t kVersion = 8;
+static const uint32_t kVersion = 9;
 static const float kGravity = 9.80665f;
 static const float kAccelSmoothing = 0.3f; // seconds
 
@@ -347,6 +349,12 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_ms);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_speed_limit, SCS_U32_NIL, SCS_VALUE_TYPE_float,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->speed_limit_ms);
+    // The route advisor's distance and time to where the GPS is routed (a job's final stop): the
+    // Driving view's ETA, shown only when the next stop is that one.
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_distance, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->nav_distance_m);
+    p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_navigation_time, SCS_U32_NIL, SCS_VALUE_TYPE_float,
+                            SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_float, &g_shared->nav_time_s);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_acceleration, SCS_U32_NIL, SCS_VALUE_TYPE_fvector,
                             SCS_TELEMETRY_CHANNEL_FLAG_no_value, store_fvector, &g_accel);
     p->register_for_channel(SCS_TELEMETRY_TRUCK_CHANNEL_local_linear_velocity, SCS_U32_NIL, SCS_VALUE_TYPE_fvector,

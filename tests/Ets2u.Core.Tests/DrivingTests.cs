@@ -352,22 +352,26 @@ public class TripTests
         Assert.False(s.InTruck);
         var e = Assert.Single(s.Events);
         Assert.Equal((DrivingEventKind.Braking, AlertLevel.Yellow, "Braking"), (e.Kind, e.Level, e.Category));
-        // One yellow in 38 game minutes = 15.8 per 10 hours, which is green (in real minutes it would be 300, red).
-        Assert.Equal(10 / (38.0 / 60), s.Score!.Value, 3);
-        Assert.Null(TripSummary.Band(s.Score.Value));
+        // One yellow in 38 game minutes counts as one in an hour: 10 per 10 hours, green (in real minutes it would be 300, red).
+        Assert.Equal(10, s.Score, 3);
+        Assert.Null(TripSummary.Band(s.Score));
         Assert.Contains("Braking", s.ToText());
     }
 
     [Fact]
-    public void ScoreWaitsForTenMinutesAndRedCountsDouble()
+    public void AShortTripCountsAsAnHourAndRedCountsDouble()
     {
         var events = new[]
         {
             new TripEvent(DrivingEventKind.Braking, AlertLevel.Red, T0, T0, "Braking", "Braking", "0.50 g", 0.5, 60, 50, false),
             new TripEvent(DrivingEventKind.Cornering, AlertLevel.Yellow, T0, T0, "Cornering", "", "0.30 g", 0.3, 60, 50, false),
         };
-        Assert.Null(new TripSummary(T0, null, TimeSpan.FromMinutes(9.9), 1, 60, false, true, events).Score);
-        Assert.Equal(3, new TripSummary(T0, null, TimeSpan.FromHours(10), 1, 60, false, true, events).Score!.Value, 6);
+        // Under an hour, the hour not driven counts as clean: 3 points in 10 minutes is 30, not 180.
+        Assert.Equal(30, new TripSummary(T0, null, TimeSpan.FromMinutes(10), 1, 60, false, true, events).Score, 6);
+        Assert.Equal(30, new TripSummary(T0, null, TimeSpan.FromMinutes(1), 1, 60, false, true, events).Score, 6);
+        Assert.Equal(15, new TripSummary(T0, null, TimeSpan.FromHours(2), 1, 60, false, true, events).Score, 6);
+        Assert.Equal(3, new TripSummary(T0, null, TimeSpan.FromHours(10), 1, 60, false, true, events).Score, 6);
+        Assert.Equal(0, new TripSummary(T0, null, TimeSpan.Zero, 0, 0, false, true, []).Score);
         Assert.Null(TripSummary.Band(19.9));
         Assert.Equal(AlertLevel.Yellow, TripSummary.Band(20));
         Assert.Equal(AlertLevel.Red, TripSummary.Band(40));

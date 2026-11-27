@@ -166,7 +166,7 @@ public class JobTrackerTests
     }
 
     [Fact]
-    public void ATruckJobInATruckIsNotKept()
+    public void ATruckJobInATruckIsKeptAsATruckJob()
     {
         var jobs = new JobTracker();
         var plugin = new Plugin();
@@ -177,7 +177,10 @@ public class JobTrackerTests
         Drive(jobs, plugin, ref now, 10, 20, coach: false);
         Assert.Equal("true", jobs.Current()!.Job["is_cargo_loaded"]); // the same job, updated
         plugin.SetJob(0, "");
-        Assert.Null(Drive(jobs, plugin, ref now, 1, 0, coach: false));
+        var done = Drive(jobs, plugin, ref now, 1, 0, coach: false)!;
+        Assert.False(done.IsCoach);
+        Assert.Equal("Truck job", done.Noun);
+        Assert.StartsWith("Truck job, ", done.ToText());
     }
 
     [Fact]
@@ -243,7 +246,7 @@ public class JobTrackerTests
         Assert.Equal(94, fixedUp.Trip.DistanceKm);
         Assert.Equal(5.99, fixedUp.Trip.RealDistanceKm!.Value, 2);
         Assert.InRange(fixedUp.Trip.DrivingTime.TotalMinutes, 101, 102); // 6.45 min x 15.7
-        Assert.InRange(fixedUp.Trip.Score!.Value, 129, 131);
+        Assert.InRange(fixedUp.Trip.Score, 129, 131);
         // Once is enough: it now has real figures beside the game's.
         Assert.Same(fixedUp, JobLog.InGameTime(fixedUp));
     }
@@ -278,8 +281,8 @@ public class JobTrackerTests
 
     [Fact]
     public void TheFrameMatchesThePluginsLayout() =>
-        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[8192], gameplay_count, gameplay[4][2048], local_scale, game_time, time_offset
-        Assert.Equal(48 + 64 + 8 + 8192 + 4 + 8192 + 4 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
+        // 12 four-byte fields, truck_id[64], job_seq, job_kind, job_info[8192], gameplay_count, gameplay[4][2048], local_scale, game_time, time_offset, nav_distance_m, nav_time_s
+        Assert.Equal(48 + 64 + 8 + 8192 + 4 + 8192 + 4 + 4 + 4 + 4 + 4, Marshal.SizeOf<TelemetryFrame>());
 }
 
 public class GMeterTests
@@ -527,7 +530,7 @@ public class JobRouteTests
         job["bus.stages.current"] = "1";
         job["destination_stop.arrival_time.planned[1]"] = "60838";
         var progress = JobText.Progress(job);
-        Assert.Equal(new JobProgress(2, 3, "Clermont", 60838), progress);
+        Assert.Equal(new JobProgress(2, 3, "Clermont", 60838), progress with { Start = null, End = null });
         Assert.Equal("Due in 1 h 12 min", progress.DueText(60838 - 72));
         Assert.Equal("Late by 5 min", progress.DueText(60838 + 5));
         Assert.Null(progress.DueText(null));
@@ -535,6 +538,35 @@ public class JobRouteTests
 
     [Fact]
     public void ATruckJobIsOneStageDueAtItsDeliveryTime() =>
-        Assert.Equal(new JobProgress(1, 1, "Brno", 5000),
+        Assert.Equal(new JobProgress(1, 1, "Brno", 5000, null, 5000),
             JobText.Progress(new Dictionary<string, string> { ["destination_city"] = "Brno", ["delivery.time"] = "5000" }));
+
+    [Fact]
+    public void ACoachJobsScheduleRunsFromTheFirstDepartureToTheLastArrival()
+    {
+        var job = Stages(3, "Barcelona", "Toulouse", "Clermont", "León");
+        job["source_stop.departure_time.planned[0]"] = "60000";
+        job["destination_stop.arrival_time.planned[2]"] = "61200";
+        var progress = JobText.Progress(job);
+        Assert.Equal(60000u, progress.Start);
+        Assert.Equal(61200u, progress.End);
+    }
+
+    [Fact]
+    public void TheEtaIsOnlyGivenForTheLastStop()
+    {
+        var job = Stages(3, "Barcelona", "Toulouse", "Clermont", "León");
+        job["bus.stages.current"] = "1";
+        // On the way: the route advisor is routed to León, not Clermont, so there's no honest figure.
+        Assert.Null(JobText.Progress(job).Eta(60000, 3600, 50_000));
+        job["bus.stages.current"] = "2";
+        var last = JobText.Progress(job);
+        Assert.True(last.NextIsLast);
+        Assert.Equal(60060u, last.Eta(60000, 3600, 50_000));
+        Assert.Null(last.Eta(60000, 0, 0)); // no route set
+        Assert.Null(last.Eta(null, 3600, 50_000)); // no clock
+        // A truck job has one stop: always the last.
+        var truck = JobText.Progress(new Dictionary<string, string> { ["destination_city"] = "Brno", ["delivery.time"] = "5000" });
+        Assert.Equal(4090u, truck.Eta(4000, 5400, 90_000));
+    }
 }

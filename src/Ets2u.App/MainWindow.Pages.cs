@@ -61,7 +61,7 @@ public partial class MainWindow
             [OptionalTab] = (s.OptionalMods.Mods.Any(m => m.Source.Included), false),
             [OverlayTab] = (s.SpeedOverlay, true),
             [AlertsTab] = (s.CoachAlerts || s.TruckAlerts, true),
-            [TripTab] = (s.RecordCoachJobs, true),
+            [TripTab] = (s.RecordJobs, true),
         };
         foreach (var tab in Nav.Items.OfType<TabItem>().Where(t => t.Tag as string != "group"))
         {

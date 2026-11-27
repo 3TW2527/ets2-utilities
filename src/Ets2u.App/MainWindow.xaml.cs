@@ -47,8 +47,8 @@ public partial class MainWindow : Window
         {
             InitPages();
             InitDriving();
-            // Coach jobs are summarised in the background, so the reader starts with the app.
-            if (_app.Settings.RecordCoachJobs) _ = Hub;
+            // Jobs are summarised in the background, so the reader starts with the app.
+            if (_app.Settings.RecordJobs) _ = Hub;
             RefreshAll();
             UpdateOverlay();
             // MOUSE DRIVING DISABLED:

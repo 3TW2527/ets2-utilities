@@ -39,8 +39,28 @@ public sealed class TelemetryHub : IDisposable
     /// <summary>Splits the driving into jobs, each with its own trip summary.</summary>
     public JobTracker Jobs { get; } = new();
 
-    /// <summary>A coach job just ended (raised on the reader thread).</summary>
+    /// <summary>
+    /// What the Driving view counts: a copy of the job being driven (else the trip of Start/Stop, else the
+    /// driving since the app opened), kept in step frame by frame. F5 starts it afresh (<see cref="ResetView"/>)
+    /// without touching the job's or the trip's own summary; the next job or trip copies that one again.
+    /// </summary>
+    public TripRecorder View { get; } = new();
+
+    /// <summary>When F5 last started the Driving view's counts afresh, while they still run from then; else null.</summary>
+    public DateTime? ViewResetAt
+    {
+        get { lock (_lock) return _viewResetAt; }
+    }
+
+    /// <summary>Starts the Driving view's counts and the traffic light afresh (on the reader thread's next step).</summary>
+    public void ResetView() => _resetView = true;
+
+    /// <summary>A coach or truck job just ended (raised on the reader thread).</summary>
     public event Action<JobSummary>? JobFinished;
+    volatile bool _resetView;
+    DateTime? _viewResetAt;
+    /// <summary>What <see cref="View"/> copies: the job's or the trip's start (and the trip's stop), or none.</summary>
+    (int Kind, DateTime? Started, DateTime? Stopped) _viewSource = (-1, null, null);
     readonly Thread _thread;
     readonly object _lock = new();
     volatile bool _stop;
@@ -52,6 +72,7 @@ public sealed class TelemetryHub : IDisposable
     AlertLevel? _recent;
     LightReading _light;
     uint? _gameMinute, _localMinute;
+    (float TimeS, float DistanceM) _nav;
     int _savedRevision;
     DateTime _savedAt;
 
@@ -65,7 +86,7 @@ public sealed class TelemetryHub : IDisposable
         _game = installDir is null ? null : new GameArchives(installDir);
         _vehicles = new VehicleKind(() => _game);
         // The coach job that was in progress when the app last closed, held until the game sends it again.
-        if (settings.RecordCoachJobs && JobLog.LoadCurrent() is { } saved) Jobs.Restore(saved);
+        if (settings.RecordJobs && JobLog.LoadCurrent() is { } saved) Jobs.Restore(saved);
         _savedRevision = Jobs.Revision;
         _thread = new Thread(Run) { IsBackground = true, Name = "ets2u telemetry", Priority = ThreadPriority.BelowNormal };
         _thread.Start();
@@ -116,6 +137,12 @@ public sealed class TelemetryHub : IDisposable
         get { lock (_lock) return _localMinute; }
     }
 
+    /// <summary>The route advisor's time (s) and distance (m) to where the GPS is routed; zeros when there's no route or no game.</summary>
+    public (float TimeS, float DistanceM) Navigation
+    {
+        get { lock (_lock) return _nav; }
+    }
+
     public DrivingThresholds ThresholdsFor(bool coach) =>
         coach ? _settings.EffectiveCoachThresholds : _settings.EffectiveTruckThresholds;
 
@@ -144,12 +171,19 @@ public sealed class TelemetryHub : IDisposable
     {
         var coach = frame is { } v && _vehicles.IsCoach(v.TruckId);
         var alerts = coach ? _settings.CoachAlerts : _settings.TruckAlerts;
-        var recordJobs = _settings.RecordCoachJobs;
-        // A job's summary counts events like a trip does, alerts or not.
-        var capturing = Trip.Capturing || (recordJobs && Jobs.Active);
+        var recordJobs = _settings.RecordJobs;
+        // Events are found whatever the alerts' switches say: the trip, the job and the Driving view count
+        // them all; the switches only decide what's shown on screen and on the light.
         IReadOnlyList<DrivingEvent> news = [];
         List<DrivingEvent> shown = [];
-        if (frame is { } f && (alerts || capturing))
+        if (_resetView)
+        {
+            _resetView = false;
+            _status.Clear();
+            View.Start(now);
+            lock (_lock) _viewResetAt = now;
+        }
+        if (frame is { } f)
         {
             // Speeding is left out everywhere (alerts, light, trips, jobs) while its switch is off.
             _detector.Speeding = _settings.SpeedingAlerts;
@@ -173,12 +207,14 @@ public sealed class TelemetryHub : IDisposable
         _status.Strictness = _settings.TrafficLightStrictness;
         _status.Step(now, alerts ? frame?.SpeedMs : null, scale, shown);
         Trip.Step(now, frame?.SpeedMs, coach, news, scale);
-        if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished)
+        if (recordJobs && Jobs.Step(now, raw, frame?.SpeedMs, coach, news, scale) is { } finished
+            && (finished.IsCoach ? _settings.RecordCoachJobs : _settings.RecordTruckJobs))
         {
             try { JobFinished?.Invoke(finished); }
             catch (Exception ex) { AppDirs.Log("Job summary: " + ex); }
         }
         if (recordJobs) SaveJob(now, force: false);
+        StepView(now, frame?.SpeedMs, coach, news, scale);
         _events.RemoveAll(e => e.Ended is { } end && now - end > Linger);
         var cards = _events.Count == 0
             ? []
@@ -193,10 +229,40 @@ public sealed class TelemetryHub : IDisposable
             _light = new LightReading(_status.Points, _status.YellowFrom, _status.RedFrom, _status.WindowMinutes, _status.Level);
             _gameMinute = (frame ?? raw)?.GameMinute;
             _localMinute = (frame ?? raw)?.LocalGameMinute;
+            _nav = (frame ?? raw) is { } n ? (n.NavTimeS, n.NavDistanceM) : default;
             if (frame is { } g)
                 _peaks = new GPeaks(Math.Max(_peaks.Accel, g.AccelForwardG), Math.Max(_peaks.Brake, -g.AccelForwardG),
                     Math.Max(_peaks.Left, -g.AccelRightG), Math.Max(_peaks.Right, g.AccelRightG));
         }
+    }
+
+    /// <summary>
+    /// Keeps <see cref="View"/> in step: when the job (or the trip) changes, it becomes a copy of it, dropping
+    /// an F5 reset; otherwise it counts this step the same way they do.
+    /// </summary>
+    void StepView(DateTime now, float? speedMs, bool coach, IReadOnlyList<DrivingEvent> news, double scale)
+    {
+        var job = Jobs.StartedAt;
+        var trip = Trip.Bounds;
+        var source = job is not null ? (1, job, (DateTime?)null)
+            : trip is { } t ? (2, t.Started, t.Stopped)
+            : (0, (DateTime?)null, (DateTime?)null);
+        if (source != _viewSource)
+        {
+            _viewSource = source;
+            var copy = source.Item1 == 1 ? Jobs.Current()?.Trip : source.Item1 == 2 ? Trip.Snapshot() : null;
+            if (copy is null) View.Start(now);
+            else
+            {
+                View.Resume(copy);
+                if (copy.Stopped is { } stopped) View.Stop(stopped);
+            }
+            lock (_lock) _viewResetAt = null;
+            return;
+        }
+        // A held job isn't being driven (see JobTracker.Step): the view waits with it.
+        if (source.Item1 == 1 && Jobs.Waiting) return;
+        View.Step(now, speedMs, coach, news, scale);
     }
 
     /// <summary>Saves the job in progress (or deletes the file once there's none), so it outlives the app.</summary>
@@ -222,7 +288,7 @@ public sealed class TelemetryHub : IDisposable
     {
         _stop = true;
         _thread.Join(TimeSpan.FromSeconds(2));
-        if (_settings.RecordCoachJobs && !_thread.IsAlive) SaveJob(DateTime.UtcNow, force: true);
+        if (_settings.RecordJobs && !_thread.IsAlive) SaveJob(DateTime.UtcNow, force: true);
         _telemetry.Dispose();
         _game?.Dispose();
     }

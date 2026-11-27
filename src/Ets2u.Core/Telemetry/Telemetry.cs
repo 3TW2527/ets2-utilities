@@ -10,7 +10,7 @@ namespace Ets2u.Core.Telemetry;
 public struct TelemetryFrame
 {
     public const uint ExpectedMagic = 0x54553245; // "E2UT"
-    public const uint ExpectedVersion = 8;
+    public const uint ExpectedVersion = 9;
 
     public uint Magic;
     public uint Version;
@@ -49,6 +49,10 @@ public struct TelemetryFrame
     /// minutes; 0 outside one. The game shows the server's clock there.
     /// </summary>
     public int TimeOffset;
+    /// <summary>What the route advisor has left to where the GPS is routed, in metres (truck.navigation.distance); 0 = no route.</summary>
+    public float NavDistanceM;
+    /// <summary>The route advisor's time to get there, in seconds (truck.navigation.time); 0 = no route.</summary>
+    public float NavTimeS;
 
     /// <summary>The time scale to use: 1 when the game didn't send one.</summary>
     public readonly double Scale => LocalScale > 0 && float.IsFinite(LocalScale) ? LocalScale : 1;

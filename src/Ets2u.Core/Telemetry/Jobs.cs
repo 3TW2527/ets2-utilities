@@ -16,11 +16,20 @@ public enum JobOutcome { InProgress, Delivered, Cancelled, Ended, Failed }
 /// <param name="Result">The attributes of the delivered or cancelled event, if the game sent one.</param>
 /// <param name="ResultEvent">That event's id, e.g. "job.delivered".</param>
 /// <param name="AppClosed">The app was closed for part of the job, so the driving then isn't in the summary.</param>
+/// <param name="GameStarted">The local economy's clock (minutes, see <see cref="GameClock"/>) when the app saw the job start; null when not known.</param>
 public sealed record JobSummary(
     DateTime Started, DateTime? Ended, JobKind Kind, JobOutcome Outcome,
     IReadOnlyDictionary<string, string> Job, IReadOnlyDictionary<string, string>? Result, string? ResultEvent,
-    TripSummary Trip, bool AppClosed = false)
+    TripSummary Trip, bool AppClosed = false, uint? GameStarted = null)
 {
+    /// <summary>A bus job, or a job driven in a coach only; else a truck job. Each kind is kept in its own log.</summary>
+    [JsonIgnore]
+    public bool IsCoach => Kind == JobKind.Bus || (Trip.InCoach && !Trip.InTruck);
+
+    /// <summary>"Coach job" or "Truck job".</summary>
+    [JsonIgnore]
+    public string Noun => IsCoach ? "Coach job" : "Truck job";
+
     public const string AppClosedNote =
         "The app was closed for part of this job, so the driving then isn't counted: its events are missing, " +
         "and the distance and driving time are the game's own where it gave them.";
@@ -32,7 +41,7 @@ public sealed record JobSummary(
     public string ToText()
     {
         var c = CultureInfo.InvariantCulture;
-        var head = string.Create(c, $"Coach job, {Started.ToLocalTime():yyyy-MM-dd HH:mm}");
+        var head = string.Create(c, $"{Noun}, {Started.ToLocalTime():yyyy-MM-dd HH:mm}");
         if (Route.Length > 0) head += " · " + Route;
         var lines = new List<string> { head, "Result: " + JobText.Describe(Outcome, Result) };
         if (AppClosed) lines.Add(AppClosedNote);
@@ -45,8 +54,24 @@ public sealed record JobSummary(
 /// <param name="Stage">The stage being driven, from 1.</param>
 /// <param name="NextStop">The stop or city it's heading for; null when the game didn't name it.</param>
 /// <param name="Due">When it's due there, on the game's clock (minutes); null when not known.</param>
-public sealed record JobProgress(int Stage, int Stages, string? NextStop, uint? Due)
+/// <param name="Start">When the job is scheduled to leave its first stop (a coach job's planned departure); null when not known.</param>
+/// <param name="End">When it's due at its last stop; null when not known.</param>
+public sealed record JobProgress(int Stage, int Stages, string? NextStop, uint? Due, uint? Start = null, uint? End = null)
 {
+    /// <summary>The next stop is the job's last: the one the game's route advisor is routed to.</summary>
+    public bool NextIsLast => Stage >= Stages;
+
+    /// <summary>
+    /// When the job gets to its next stop by the route advisor's time (truck.navigation.time, seconds, on the
+    /// game's clock), from <paramref name="now"/> (minutes). Only for the last stop: the advisor is routed
+    /// there, and the game gives no distance or time for a coach job's stops on the way, so any figure for
+    /// those would be a guess. Null then, and when there's no route or no clock.
+    /// </summary>
+    public uint? Eta(uint? now, float navTimeS, float navDistanceM) =>
+        NextIsLast && now is { } clock && float.IsFinite(navTimeS) && navTimeS > 0 && navDistanceM > 0
+            ? clock + (uint)Math.Round(navTimeS / 60)
+            : null;
+
     /// <summary>"Due in 1 h 12 min", "Late by 5 min", or null when the due time or the clock isn't known.</summary>
     public string? DueText(uint? now) => Due is not { } due || now is not { } clock ? null
         : due >= clock ? "Due in " + JobText.Minutes(due - clock) : "Late by " + JobText.Minutes(clock - due);
@@ -122,12 +147,13 @@ public static class JobText
             var stages = (int)count;
             var current = Math.Clamp((int)(Number(job.GetValueOrDefault("bus.stages.current")) ?? 0), 0, stages - 1);
             var next = job.GetValueOrDefault($"destination_stop.name[{current}]") is { Length: > 0 } name ? name : null;
-            var due = Number(job.GetValueOrDefault($"destination_stop.arrival_time.planned[{current}]")) is { } d && d > 0 ? (uint)d : (uint?)null;
-            return new JobProgress(current + 1, stages, next, due);
+            uint? Minute(string key) => Number(job.GetValueOrDefault(key)) is { } m && m > 0 ? (uint)m : null;
+            return new JobProgress(current + 1, stages, next, Minute($"destination_stop.arrival_time.planned[{current}]"),
+                Minute("source_stop.departure_time.planned[0]"), Minute($"destination_stop.arrival_time.planned[{stages - 1}]"));
         }
         var city = job.GetValueOrDefault("destination_city") is { Length: > 0 } c ? c : null;
         var delivery = Number(job.GetValueOrDefault("delivery.time")) is { } t && t > 0 ? (uint)t : (uint?)null;
-        return new JobProgress(1, 1, city, delivery);
+        return new JobProgress(1, 1, city, delivery, null, delivery);
     }
 
     /// <summary>"1 h 12 min" or "12 min", from game minutes.</summary>
@@ -258,6 +284,7 @@ public sealed class JobTracker
     JobKind _kind;
     Dictionary<string, string> _job = new();
     DateTime _started;
+    uint? _gameStarted;
     (JobOutcome Outcome, string Id, Dictionary<string, string> Attributes)? _result;
     uint? _gameplaySeen;
     bool _waiting, _appClosed;
@@ -286,6 +313,7 @@ public sealed class JobTracker
             _kind = saved.Kind;
             _job = new Dictionary<string, string>(saved.Job);
             _started = saved.Started;
+            _gameStarted = saved.GameStarted;
             _result = null;
             _waiting = _appClosed = true;
             _noJobSince = null;
@@ -299,9 +327,15 @@ public sealed class JobTracker
         lock (_lock)
         {
             return _trip?.Snapshot() is { } trip
-                ? new JobSummary(_started, null, _kind, JobOutcome.InProgress, _job, _result?.Attributes, _result?.Id, trip, _appClosed)
+                ? new JobSummary(_started, null, _kind, JobOutcome.InProgress, _job, _result?.Attributes, _result?.Id, trip, _appClosed, _gameStarted)
                 : null;
         }
+    }
+
+    /// <summary>When the job being driven started (real time), or null: cheap, for telling one job from the next.</summary>
+    public DateTime? StartedAt
+    {
+        get { lock (_lock) return _trip is null ? null : _started; }
     }
 
     /// <summary>Takes an event off the job being driven.</summary>
@@ -322,7 +356,7 @@ public sealed class JobTracker
 
     /// <summary>
     /// One reader step. <paramref name="raw"/> is the plugin's frame even while paused (null when the game
-    /// isn't running); <paramref name="speedMs"/> is null while paused. Returns the coach job that just
+    /// isn't running); <paramref name="speedMs"/> is null while paused. Returns the job that just
     /// finished, if one did.
     /// </summary>
     public JobSummary? Step(DateTime now, TelemetryFrame? raw, float? speedMs, bool coach, IEnumerable<DrivingEvent> news,
@@ -366,7 +400,7 @@ public sealed class JobTracker
                         else if (kind != JobKind.None)
                         {
                             finished = Finish(now);
-                            Begin(now, kind, job);
+                            Begin(now, kind, job, f.LocalGameMinute);
                         }
                         else if (speedMs is not null && (_noJobSince ??= now) is var since && now - since >= NoJobGrace)
                         {
@@ -379,7 +413,7 @@ public sealed class JobTracker
                         if (_trip is not null && (kind == JobKind.None || kind != _kind || (changed && _result is not null)))
                             finished = Finish(now);
                         if (_trip is null && kind != JobKind.None)
-                            Begin(now, kind, job);
+                            Begin(now, kind, job, f.LocalGameMinute);
                         else if (_trip is not null)
                             _job = job; // the same job, updated (e.g. cargo loaded)
                     }
@@ -397,8 +431,9 @@ public sealed class JobTracker
     static bool SameJob(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>
         a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && v == kv.Value);
 
-    void Begin(DateTime now, JobKind kind, Dictionary<string, string> job)
+    void Begin(DateTime now, JobKind kind, Dictionary<string, string> job, uint? gameMinute)
     {
+        _gameStarted = gameMinute;
         _trip = new TripRecorder();
         _trip.Start(now);
         _kind = kind;
@@ -425,19 +460,19 @@ public sealed class JobTracker
                 DistanceKm = km,
             };
         var job = new JobSummary(_started, now, _kind, _result?.Outcome ?? JobOutcome.Ended, _job, _result?.Attributes, _result?.Id,
-            summary, _appClosed);
+            summary, _appClosed, _gameStarted);
         _result = null;
         _waiting = _appClosed = false;
         _noJobSince = null;
         Revision++;
-        var isCoach = _kind == JobKind.Bus || (summary.InCoach && !summary.InTruck);
-        // A job that was never driven (a profile loaded and left) isn't worth a summary.
+        // A job that was never driven (a profile loaded and left) isn't worth a summary. Coach and truck
+        // jobs both come back; the app files each in its own log (JobSummary.IsCoach).
         var driven = summary.DrivingTime > TimeSpan.Zero || job.Outcome != JobOutcome.Ended;
-        return isCoach && driven ? job : null;
+        return driven ? job : null;
     }
 }
 
-/// <summary>The coach jobs' summaries, newest first, in %APPDATA%\ets2u\coach_jobs.json.</summary>
+/// <summary>The jobs' summaries, newest first: coach jobs in %APPDATA%\ets2u\coach_jobs.json, truck jobs in truck_jobs.json.</summary>
 public static class JobLog
 {
     public const int Keep = 200;
@@ -449,6 +484,10 @@ public static class JobLog
     };
 
     public static string FilePath => Path.Combine(AppDirs.Settings, "coach_jobs.json");
+    public static string TruckFilePath => Path.Combine(AppDirs.Settings, "truck_jobs.json");
+
+    /// <summary>The log a coach or a truck job goes in.</summary>
+    public static string PathFor(bool truck) => truck ? TruckFilePath : FilePath;
 
     public static List<JobSummary> Load(string? path = null)
     {
@@ -460,7 +499,7 @@ public static class JobLog
         }
         catch (Exception ex) when (ex is JsonException or IOException or NotSupportedException)
         {
-            AppDirs.Log("coach_jobs.json: " + ex.Message);
+            AppDirs.Log(Path.GetFileName(path) + ": " + ex.Message);
             return [];
         }
     }

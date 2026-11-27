@@ -154,7 +154,7 @@ int main(int argc, char **argv)
     const float *f = reinterpret_cast<const float *>(raw);
     printf("magic=%08X version=%u sequence=%u paused=%u speed=%.2f limit=%.2f fwd=%.3fg right=%.3fg mouse=%u truck=%s\n",
            raw[0], raw[1], raw[2], raw[3], f[4], f[5], f[6], f[7], raw[8], reinterpret_cast<const char *>(raw + 12));
-    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 8 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
+    bool ok = device_ok && raw[0] == 0x54553245 && raw[1] == 9 && raw[2] == 3 && raw[3] == 0 && f[4] == 25.0f
               && f[5] > 22.2f && f[5] < 22.3f
               // smoothed towards -0.4 g forward and 0.2 g right: two frames of at most 0.2 s each count: about three quarters of the way
               && f[6] < -0.27f && f[6] > -0.32f && f[7] > 0.135f && f[7] < 0.16f && raw[8] == 0

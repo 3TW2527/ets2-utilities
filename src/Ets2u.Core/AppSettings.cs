@@ -70,6 +70,12 @@ public sealed class AppSettings
 
     /// <summary>Keeps a trip summary of every coach job driven with the app open (needs the plugin).</summary>
     public bool RecordCoachJobs { get; set; } = true;
+    /// <summary>The same for truck jobs, kept in a log of their own.</summary>
+    public bool RecordTruckJobs { get; set; } = true;
+
+    /// <summary>Either kind of job is summarised, so jobs are followed.</summary>
+    [JsonIgnore]
+    public bool RecordJobs => RecordCoachJobs || RecordTruckJobs;
 
     /// <summary>The order of the Trip summary page's safety events.</summary>
     public Telemetry.TripSort TripSort { get; set; } = Telemetry.TripSort.Time;

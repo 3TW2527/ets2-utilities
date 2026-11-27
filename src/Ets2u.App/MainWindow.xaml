@@ -692,6 +692,27 @@
                             <Setter Property="Foreground" Value="#E8EDF2"/>
                             <Setter Property="FontWeight" Value="SemiBold"/>
                         </Style>
+                        <!-- A table's row label and its value. -->
+                        <Style TargetType="TextBlock" x:Key="Cell">
+                            <Setter Property="Foreground" Value="#8B98A6"/>
+                            <Setter Property="FontSize" Value="16"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="Margin" Value="0,5,12,5"/>
+                        </Style>
+                        <Style TargetType="TextBlock" x:Key="Value">
+                            <Setter Property="Foreground" Value="#E8EDF2"/>
+                            <Setter Property="FontSize" Value="18"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                            <Setter Property="VerticalAlignment" Value="Center"/>
+                            <Setter Property="TextWrapping" Value="Wrap"/>
+                            <Setter Property="Margin" Value="0,5,0,5"/>
+                        </Style>
+                        <Style TargetType="Border" x:Key="Rule">
+                            <Setter Property="BorderBrush" Value="#2A333D"/>
+                            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                            <Setter Property="Grid.ColumnSpan" Value="2"/>
+                        </Style>
                         <Style TargetType="Ellipse" x:Key="Lamp">
                             <Setter Property="Width" Value="62"/>
                             <Setter Property="Height" Value="62"/>
@@ -699,12 +720,11 @@
                         </Style>
                     </Grid.Resources>
                     <Viewbox Stretch="Uniform" Margin="10">
-                        <Grid Width="980" Height="600">
+                        <Grid Width="980">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="36"/>
-                                <RowDefinition Height="250"/>
-                                <RowDefinition Height="170"/>
-                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto" MinHeight="250"/>
+                                <RowDefinition Height="Auto" MinHeight="300"/>
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="330"/>
@@ -754,26 +774,87 @@
                                 </Grid>
                             </Border>
 
-                            <!-- The job. -->
+                            <!-- The job: where it's going and when, on the game's clock. -->
                             <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock x:Name="DriveJobLabel" Style="{StaticResource Label}" Text="JOB"/>
-                                    <TextBlock x:Name="DriveRoute" Style="{StaticResource Big}" FontSize="28" TextWrapping="Wrap" Margin="0,8,0,0"/>
-                                    <TextBlock x:Name="DriveStage" Style="{StaticResource Label}" FontSize="18" Margin="0,8,0,0"/>
-                                    <TextBlock x:Name="DriveNext" Style="{StaticResource Big}" FontSize="22" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock x:Name="DriveDue" FontSize="26" FontWeight="SemiBold" Margin="0,6,0,0"/>
+                                    <TextBlock x:Name="DriveRoute" Style="{StaticResource Big}" FontSize="24" Margin="0,4,0,4" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="DriveStage" Style="{StaticResource Label}" FontSize="16" TextWrapping="Wrap"/>
+                                    <Grid x:Name="DriveJobTable">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="96"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Border Style="{StaticResource Rule}"/>
+                                        <Border Grid.Row="1" Style="{StaticResource Rule}"/>
+                                        <Border Grid.Row="2" Style="{StaticResource Rule}"/>
+                                        <Border x:Name="DriveEtaRule" Grid.Row="3" Style="{StaticResource Rule}"/>
+                                        <TextBlock Style="{StaticResource Cell}" Text="Start"/>
+                                        <TextBlock x:Name="DriveSchedStart" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="1" Style="{StaticResource Cell}" Text="Next stop"/>
+                                        <TextBlock x:Name="DriveNext" Grid.Row="1" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="2" Style="{StaticResource Cell}" Text="Due there"/>
+                                        <TextBlock x:Name="DriveDue" Grid.Row="2" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock x:Name="DriveEtaLabel" Grid.Row="3" Style="{StaticResource Cell}" Text="ETA"/>
+                                        <TextBlock x:Name="DriveEta" Grid.Row="3" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="4" Style="{StaticResource Cell}" Text="End"/>
+                                        <TextBlock x:Name="DriveSchedEnd" Grid.Row="4" Grid.Column="1" Style="{StaticResource Value}"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Events of the trip or job, and its score. -->
-                            <UniformGrid x:Name="DriveCounts" Grid.Row="2" Grid.ColumnSpan="3" Columns="5"/>
+                            <!-- Events of the trip or job: a column per kind, a row per level. -->
+                            <Border Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource Card}">
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource Label}" Text="SAFETY EVENTS"/>
+                                    <Grid x:Name="DriveEventsTable" Margin="0,8,0,0"/>
+                                </DockPanel>
+                            </Border>
 
-                            <!-- Totals and the latest event. -->
-                            <Border Grid.Row="3" Grid.ColumnSpan="3" Style="{StaticResource Card}">
-                                <StackPanel VerticalAlignment="Center">
-                                    <TextBlock x:Name="DriveTotals" Style="{StaticResource Big}" FontSize="22"/>
-                                    <TextBlock x:Name="DriveLast" Style="{StaticResource Label}" FontSize="18" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
+                            <!-- The trip or job in figures: score, totals, the latest event. -->
+                            <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource Card}">
+                                <DockPanel>
+                                    <TextBlock x:Name="DriveSummaryLabel" DockPanel.Dock="Top" Style="{StaticResource Label}" Text="SUMMARY" TextWrapping="Wrap"/>
+                                    <TextBlock DockPanel.Dock="Bottom" Style="{StaticResource Label}" FontSize="12" FontWeight="Normal" Margin="0,8,0,0" TextWrapping="Wrap"
+                                               Text="Press F5 to clear these counts. The job's own summary keeps every event."/>
+                                    <Grid Margin="0,6,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="104"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" MinHeight="62"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Border Style="{StaticResource Rule}"/>
+                                        <Border Grid.Row="1" Style="{StaticResource Rule}"/>
+                                        <Border Grid.Row="2" Style="{StaticResource Rule}"/>
+                                        <Border Grid.Row="3" Style="{StaticResource Rule}"/>
+                                        <TextBlock Style="{StaticResource Cell}" Text="Safety score"/>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock x:Name="DriveScore" Style="{StaticResource Big}" FontSize="44"/>
+                                            <TextBlock x:Name="DriveScoreLabel" Style="{StaticResource Label}" FontSize="16" VerticalAlignment="Bottom" Margin="10,0,0,10"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="1" Style="{StaticResource Cell}" Text="Driving"/>
+                                        <TextBlock x:Name="DriveTime" Grid.Row="1" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="2" Style="{StaticResource Cell}" Text="Distance"/>
+                                        <TextBlock x:Name="DriveDistance" Grid.Row="2" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="3" Style="{StaticResource Cell}" Text="Top speed"/>
+                                        <TextBlock x:Name="DriveTop" Grid.Row="3" Grid.Column="1" Style="{StaticResource Value}"/>
+                                        <TextBlock Grid.Row="4" Style="{StaticResource Cell}" Text="Last event"/>
+                                        <TextBlock x:Name="DriveLast" Grid.Row="4" Grid.Column="1" Style="{StaticResource Value}" FontSize="16"/>
+                                    </Grid>
+                                </DockPanel>
                             </Border>
                         </Grid>
                     </Viewbox>
@@ -992,13 +1073,14 @@
             <TabItem x:Name="TripTab" Header="Trip summary">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Style="{StaticResource Page}">
-                        <local:PageHeader Title="Trip summary" Subtitle="Every harsh event of a trip or coach job, with a GreenRoad-style safety score."
+                        <local:PageHeader Title="Trip summary" Subtitle="Every harsh event of a trip, coach job or truck job, with a GreenRoad-style safety score."
                                           Needs="Plugin|App open while driving"
                                           Info="Press Start capturing before you set off and Stop capturing when you arrive. Every harsh acceleration, braking, cornering and speeding event is listed with its time, using the thresholds on the Driving alerts page for the vehicle you're in, whether the alerts show or not (speeding only while Speeding alerts is ticked). Times are the game's clock, which doesn't change with time zones. Click an event for its details. The trip is kept until you start the next one or close the app."/>
                         <TextBlock x:Name="TripPluginStatus" Style="{StaticResource Status}"/>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <CheckBox x:Name="RecordJobsBox" Click="RecordJobs_Click" Content="Also keep a summary of every coach job"/>
-                            <local:InfoTip Text="Automatic, from when you take the job to when it's delivered or cancelled: no buttons to press. Needs the plugin and this app open for the whole job. The last 200 jobs are kept; pick one under Show."/>
+                            <CheckBox x:Name="RecordJobsBox" Click="RecordJobs_Click" Content="Keep a summary of every coach job"/>
+                            <CheckBox x:Name="RecordTruckJobsBox" Click="RecordJobs_Click" Content="and every truck job" Margin="16,0,0,0"/>
+                            <local:InfoTip Text="Automatic, from when you take the job to when it's delivered or cancelled: no buttons to press. Needs the plugin and this app open for the whole job. Kept whether the driving alerts are on or off. Coach and truck jobs are kept apart, the last 200 of each; pick one under Show."/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock Text="Show" VerticalAlignment="Center" Margin="0,0,8,0"/>
